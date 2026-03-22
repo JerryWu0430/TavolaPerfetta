@@ -15,9 +15,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 import { useTranslations, useI18n, type Locale } from "@/lib/i18n"
-import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon, FileTextIcon, LanguagesIcon } from "lucide-react"
+import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon, FileTextIcon, LanguagesIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 
 const user = {
   name: "Chef Marco",
@@ -29,6 +31,25 @@ const languages: { code: Locale; label: string; flag: string }[] = [
   { code: "en", label: "English", flag: "🇬🇧" },
   { code: "it", label: "Italiano", flag: "🇮🇹" },
 ]
+
+function SidebarToggleArrow() {
+  const { toggleSidebar, open } = useSidebar()
+
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      onClick={toggleSidebar}
+      className="absolute -right-3 top-6 z-50 size-6 rounded-full border bg-background shadow-md hover:bg-accent"
+    >
+      {open ? (
+        <ChevronLeftIcon className="size-4" />
+      ) : (
+        <ChevronRightIcon className="size-4" />
+      )}
+    </Button>
+  )
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const t = useTranslations()
@@ -52,11 +73,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   ]
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarToggleArrow />
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
+              tooltip="TavolaPerfetta"
               className="data-[slot=sidebar-menu-button]:p-1.5!"
               render={<Link href="/" />}
             >
@@ -75,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={() => setLocale(locale === "en" ? "it" : "en")}
-              tooltip="Language"
+              tooltip={`${languages.find(l => l.code === locale)?.flag} ${languages.find(l => l.code === locale)?.label}`}
             >
               <LanguagesIcon />
               <span>{languages.find(l => l.code === locale)?.flag} {languages.find(l => l.code === locale)?.label}</span>
