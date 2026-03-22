@@ -16,7 +16,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useTranslations } from "@/lib/i18n"
-import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon } from "lucide-react"
+import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon, FileTextIcon } from "lucide-react"
 
 const user = {
   name: "Chef Marco",
@@ -32,6 +32,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: t.nav.products, url: "/products", icon: <PackageIcon /> },
     { title: t.nav.suppliers, url: "/suppliers", icon: <TruckIcon /> },
     { title: t.nav.inventory, url: "/inventory", icon: <WarehouseIcon /> },
+    { title: t.nav.bolla, url: "/bolla", icon: <FileTextIcon /> },
     { title: t.nav.planning, url: "/planning", icon: <CalendarIcon /> },
     { title: t.nav.haccp, url: "/haccp", icon: <ShieldCheckIcon /> },
     { title: t.nav.reports, url: "/reports", icon: <BarChart3Icon /> },

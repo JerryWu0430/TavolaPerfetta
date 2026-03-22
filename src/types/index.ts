@@ -160,6 +160,47 @@ export interface LocationComparison {
   avgTicket: number
 }
 
+// Invoice/Bolla
+export type InvoiceStatus = "pending" | "review" | "confirmed" | "rejected"
+export type AnomalyType = "price_increase" | "quantity_mismatch" | "new_item" | "missing_item"
+
+export interface InvoiceLine {
+  id: string
+  description: string
+  quantity: number
+  unit: string
+  unitPrice: number
+  total: number
+  // Anomaly detection
+  anomaly?: {
+    type: AnomalyType
+    message: string
+    expectedValue?: number
+    severity: "warning" | "error"
+  }
+  // Match to inventory
+  matchedIngredientId?: string
+  confidence?: number
+}
+
+export interface Invoice {
+  id: string
+  supplierName: string
+  supplierVAT?: string
+  invoiceNumber: string
+  invoiceDate: string
+  dueDate?: string
+  subtotal: number
+  vat: number
+  total: number
+  lines: InvoiceLine[]
+  status: InvoiceStatus
+  uploadedAt: string
+  confirmedAt?: string
+  confirmedBy?: string
+  rawOCRData?: string
+}
+
 // Format helpers
 export const formatEUR = (value: number): string => {
   return new Intl.NumberFormat("it-IT", {
