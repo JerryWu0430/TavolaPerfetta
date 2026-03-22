@@ -14,9 +14,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { useTranslations } from "@/lib/i18n"
-import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon, FileTextIcon } from "lucide-react"
+import { useTranslations, useI18n, type Locale } from "@/lib/i18n"
+import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon, FileTextIcon, LanguagesIcon } from "lucide-react"
 
 const user = {
   name: "Chef Marco",
@@ -24,8 +25,14 @@ const user = {
   avatar: "/avatars/chef.jpg",
 }
 
+const languages: { code: Locale; label: string; flag: string }[] = [
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "it", label: "Italiano", flag: "🇮🇹" },
+]
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const t = useTranslations()
+  const { locale, setLocale } = useI18n()
 
   const navMain = [
     { title: t.nav.home, url: "/", icon: <HomeIcon /> },
@@ -64,6 +71,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => setLocale(locale === "en" ? "it" : "en")}
+              tooltip="Language"
+            >
+              <LanguagesIcon />
+              <span>{languages.find(l => l.code === locale)?.flag} {languages.find(l => l.code === locale)?.label}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SidebarSeparator />
         <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
