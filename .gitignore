@@ -1,0 +1,5 @@
+# Root-level Next/cache (if dev is run from repo root)
+.next/
+
+# OS
+.DS_Store
