@@ -17,37 +17,36 @@ This starts:
 
 ### Option 2: Local Development
 
-1. Install PostgreSQL and create database:
+1. Install [uv](https://docs.astral.sh/uv/) and PostgreSQL:
 ```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create database
 createdb tavolaperfetta
 ```
 
-2. Create virtual environment:
+2. Install dependencies:
 ```bash
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+cd backend
+uv sync
 ```
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Copy environment file:
+3. Copy environment file:
 ```bash
 cp .env.example .env
 # Edit .env with your database URL and Gemini API key
 ```
 
-5. Run server:
+4. Run server:
 ```bash
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 ```
 
 ## Seed Database
 
 ```bash
-python seed.py
+uv run python seed.py
 ```
 
 ## API Documentation
