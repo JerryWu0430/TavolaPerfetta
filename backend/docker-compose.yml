@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tavolaperfetta_db
+    environment:
+      POSTGRES_USER: tavola
+      POSTGRES_PASSWORD: tavola123
+      POSTGRES_DB: tavolaperfetta
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: tavolaperfetta_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://tavola:tavola123@db:5432/tavolaperfetta
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    depends_on:
+      - db
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:

@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useTranslations, useI18n } from "@/lib/i18n"
+import { ocr, invoices, type OCRResult } from "@/lib/api"
 import type { InvoiceLine, AnomalyType } from "@/types"
 import { formatEUR } from "@/types"
 import {
@@ -548,26 +549,23 @@ export default function BollaPage() {
     setError(null)
 
     try {
-      const formData = new FormData()
-      formData.append("file", file)
+      const result = await ocr.processInvoice(file)
 
-      const response = await fetch("/api/ocr", {
-        method: "POST",
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "OCR failed")
-      }
-
-      // Detect anomalies by comparing with mock inventory prices
-      const linesWithAnomalies = result.data.lines.map((line: InvoiceLine) => {
+      // Convert OCR result to ExtractedData format with anomaly detection
+      const linesWithAnomalies: InvoiceLine[] = result.lines.map((line, idx) => {
         const expectedPrice = mockInventoryPrices[line.description]
-        if (expectedPrice && line.unitPrice > expectedPrice * 1.1) {
+        const invoiceLine: InvoiceLine = {
+          id: `line-${idx}`,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit || "pcs",
+          unitPrice: line.unit_price,
+          total: line.total,
+        }
+
+        if (expectedPrice && line.unit_price > expectedPrice * 1.1) {
           return {
-            ...line,
+            ...invoiceLine,
             anomaly: {
               type: "price_increase" as AnomalyType,
               message: t.bolla.priceIncrease,
@@ -578,7 +576,7 @@ export default function BollaPage() {
         }
         if (!expectedPrice) {
           return {
-            ...line,
+            ...invoiceLine,
             anomaly: {
               type: "new_item" as AnomalyType,
               message: t.bolla.newItem,
@@ -586,12 +584,17 @@ export default function BollaPage() {
             },
           }
         }
-        return line
+        return invoiceLine
       })
 
       setExtractedData({
-        ...result.data,
+        supplierName: result.supplier_name || "",
+        invoiceNumber: result.invoice_number || "",
+        invoiceDate: result.date || new Date().toISOString().split("T")[0],
         lines: linesWithAnomalies,
+        subtotal: result.subtotal,
+        vat: result.vat,
+        total: result.total,
       })
       setStep(2)
     } catch (err) {
@@ -601,12 +604,30 @@ export default function BollaPage() {
     }
   }
 
-  const handleSave = () => {
-    // In a real app, this would save to a database
-    alert(t.bolla.success)
-    // Reset state
-    setStep(1)
-    setExtractedData(null)
+  const handleSave = async () => {
+    if (!extractedData) return
+
+    try {
+      await invoices.create({
+        invoice_number: extractedData.invoiceNumber,
+        date: extractedData.invoiceDate,
+        total: extractedData.total,
+        vat: extractedData.vat,
+        status: "pending",
+        lines: extractedData.lines.map((line) => ({
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_price: line.unitPrice,
+          total: line.total,
+        })),
+      })
+      alert(t.bolla.success)
+      setStep(1)
+      setExtractedData(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save invoice")
+    }
   }
 
   const anomalies = extractedData?.lines.filter((l) => l.anomaly) || []
