@@ -134,6 +134,7 @@ const translations = {
       cost: "Cost",
       margin: "Margin",
       salesTrend: "Sales Trend",
+      salesWeek: "Sales/Week",
       dishes: "dishes",
       recipeDetail: "Recipe detail and ingredient costs",
       ingredients: "Ingredients",
@@ -141,6 +142,26 @@ const translations = {
       quantity: "Quantity",
       total: "Total",
       close: "Close",
+      // KPIs
+      totalDishes: "Total Dishes",
+      avgMargin: "Avg Margin",
+      bestSellers: "Best Sellers",
+      declining: "Declining",
+      dishesAbove50: "dishes >50 sold/week",
+      dishesDown20: "dishes down >20%",
+      // Add recipe dialog
+      addRecipe: "Add Recipe",
+      newRecipe: "New Recipe",
+      recipeName: "Recipe Name",
+      sellingPrice: "Selling Price (€)",
+      selectCategory: "Select category",
+      antipasti: "Antipasti",
+      primi: "Primi",
+      secondi: "Secondi",
+      dolci: "Dolci",
+      save: "Save",
+      cancel: "Cancel",
+      active: "Active",
     },
     // Suppliers page
     suppliers: {
@@ -177,6 +198,14 @@ const translations = {
       late: "Late",
       partial: "Partial",
       recentDeliveries: "Recent Deliveries",
+      // KPIs
+      activeSuppliers: "Active Suppliers",
+      openAnomalies: "Open Anomalies",
+      avgReliability: "Avg Reliability",
+      maxPriceIncrease: "Max Price Increase",
+      lateOrPartial: "late or partial deliveries",
+      acrossSuppliers: "across all suppliers",
+      fromLastMonth: "from last month",
     },
     // Inventory page
     inventory: {
@@ -427,6 +456,7 @@ const translations = {
       cost: "Costo",
       margin: "Margine",
       salesTrend: "Trend Vendite",
+      salesWeek: "Vendite/Sett.",
       dishes: "piatti",
       recipeDetail: "Dettaglio ricetta e costi ingredienti",
       ingredients: "Ingredienti",
@@ -434,6 +464,26 @@ const translations = {
       quantity: "Quantità",
       total: "Totale",
       close: "Chiudi",
+      // KPIs
+      totalDishes: "Piatti Totali",
+      avgMargin: "Margine Medio",
+      bestSellers: "Best Seller",
+      declining: "In Calo",
+      dishesAbove50: "piatti >50 venduti/sett.",
+      dishesDown20: "piatti in calo >20%",
+      // Add recipe dialog
+      addRecipe: "Aggiungi Ricetta",
+      newRecipe: "Nuova Ricetta",
+      recipeName: "Nome Ricetta",
+      sellingPrice: "Prezzo Vendita (€)",
+      selectCategory: "Seleziona categoria",
+      antipasti: "Antipasti",
+      primi: "Primi",
+      secondi: "Secondi",
+      dolci: "Dolci",
+      save: "Salva",
+      cancel: "Annulla",
+      active: "Attivo",
     },
     // Suppliers page
     suppliers: {
@@ -470,6 +520,14 @@ const translations = {
       late: "In Ritardo",
       partial: "Parziale",
       recentDeliveries: "Consegne Recenti",
+      // KPIs
+      activeSuppliers: "Fornitori Attivi",
+      openAnomalies: "Anomalie Aperte",
+      avgReliability: "Affidabilità Media",
+      maxPriceIncrease: "Max Aumento Prezzo",
+      lateOrPartial: "consegne in ritardo o parziali",
+      acrossSuppliers: "tra tutti i fornitori",
+      fromLastMonth: "dal mese scorso",
     },
     // Inventory page
     inventory: {

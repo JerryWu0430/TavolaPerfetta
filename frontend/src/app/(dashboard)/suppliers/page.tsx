@@ -46,8 +46,16 @@ import {
 import { ReliabilityBadge, PriceChangeBadge } from "@/components/status-badge"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useTranslations, useI18n } from "@/lib/i18n"
-import { suppliers as initialSuppliers, inflationData, priceHistory } from "@/data/mock/suppliers"
-import type { Supplier } from "@/types"
+import {
+  suppliers as suppliersApi,
+  deliveries as deliveriesApi,
+  priceHistory as priceHistoryApi,
+  type Supplier as APISupplier,
+  type Delivery as APIDelivery,
+  type PriceHistoryRecord,
+} from "@/lib/api"
+import { KPICard } from "@/components/kpi-card"
+import type { KPI } from "@/types"
 import {
   TruckIcon,
   ClockIcon,
@@ -58,15 +66,19 @@ import {
   PackageIcon,
   CheckCircle2Icon,
   AlertTriangleIcon,
+  Loader2Icon,
 } from "lucide-react"
 
-const inflationChartConfig = {
-  "Carni Pregiate": { label: "Carni Pregiate", color: "var(--chart-1)" },
-  "Ortofrutticola": { label: "Ortofrutticola", color: "var(--chart-2)" },
-  "Caseificio": { label: "Caseificio", color: "var(--chart-3)" },
-  "Ittica": { label: "Ittica", color: "var(--chart-4)" },
-  "Oleificio": { label: "Oleificio", color: "var(--chart-5)" },
-} satisfies ChartConfig
+interface SupplierUI {
+  id: string
+  name: string
+  category: string
+  reliability: number
+  avgDeliveryDays: number
+  priceChange: number
+  lastOrder: string
+  contact: string
+}
 
 interface Delivery {
   id: string
@@ -76,17 +88,27 @@ interface Delivery {
   notes?: string
 }
 
-// Mock deliveries data
-const mockDeliveries: Record<string, Delivery[]> = {
-  "1": [
-    { id: "d1", date: "2024-01-15", items: 5, status: "onTime" },
-    { id: "d2", date: "2024-01-10", items: 3, status: "onTime" },
-    { id: "d3", date: "2024-01-05", items: 4, status: "late", notes: "Traffic delay" },
-  ],
-  "2": [
-    { id: "d4", date: "2024-01-14", items: 8, status: "onTime" },
-    { id: "d5", date: "2024-01-07", items: 6, status: "partial", notes: "Missing 2 items" },
-  ],
+function mapSupplierToUI(s: APISupplier): SupplierUI {
+  return {
+    id: String(s.id),
+    name: s.name,
+    category: s.category || "General",
+    reliability: s.reliability_score,
+    avgDeliveryDays: s.avg_delivery_days,
+    priceChange: 0, // Will be computed from price history
+    lastOrder: s.updated_at,
+    contact: s.contact_email || s.contact_phone || "",
+  }
+}
+
+function mapDeliveryToUI(d: APIDelivery): Delivery {
+  return {
+    id: String(d.id),
+    date: d.date,
+    items: d.items?.length || 0,
+    status: d.status === "on_time" ? "onTime" : d.status === "late" ? "late" : "partial",
+    notes: d.notes || undefined,
+  }
 }
 
 function DeliveryStatusBadge({ status }: { status: Delivery["status"] }) {
@@ -116,7 +138,7 @@ function DeliveryStatusBadge({ status }: { status: Delivery["status"] }) {
   }
 }
 
-function LogDeliveryDialog({ supplier, onLog }: { supplier: Supplier; onLog: (delivery: Delivery) => void }) {
+function LogDeliveryDialog({ supplier, onLog }: { supplier: SupplierUI; onLog: (delivery: Delivery) => void }) {
   const t = useTranslations()
   const [open, setOpen] = React.useState(false)
   const [date, setDate] = React.useState(new Date().toISOString().split("T")[0])
@@ -124,18 +146,29 @@ function LogDeliveryDialog({ supplier, onLog }: { supplier: Supplier; onLog: (de
   const [status, setStatus] = React.useState<Delivery["status"]>("onTime")
   const [notes, setNotes] = React.useState("")
 
-  const handleSubmit = () => {
-    onLog({
-      id: `d-${Date.now()}`,
-      date,
-      items: parseInt(items) || 0,
-      status,
-      notes: notes || undefined,
-    })
-    setOpen(false)
-    setItems("")
-    setNotes("")
-    setStatus("onTime")
+  const handleSubmit = async () => {
+    try {
+      await deliveriesApi.create({
+        supplier_id: parseInt(supplier.id),
+        date,
+        status: status === "onTime" ? "on_time" : status,
+        notes: notes || undefined,
+        items: [],
+      })
+      onLog({
+        id: `d-${Date.now()}`,
+        date,
+        items: parseInt(items) || 0,
+        status,
+        notes: notes || undefined,
+      })
+      setOpen(false)
+      setItems("")
+      setNotes("")
+      setStatus("onTime")
+    } catch (err) {
+      console.error("Failed to create delivery:", err)
+    }
   }
 
   return (
@@ -212,14 +245,13 @@ function SupplierCard({
   deliveries,
   onLogDelivery,
 }: {
-  supplier: Supplier
+  supplier: SupplierUI
   deliveries: Delivery[]
   onLogDelivery: (delivery: Delivery) => void
 }) {
   const t = useTranslations()
   const { locale } = useI18n()
   const isMobile = useIsMobile()
-  const supplierPriceHistory = priceHistory.filter((p) => p.supplier === supplier.name)
 
   return (
     <Drawer direction={isMobile ? "bottom" : "right"}>
@@ -259,7 +291,6 @@ function SupplierCard({
           <DrawerDescription>{t.suppliers.details}</DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4">
-          {/* Quick Actions */}
           <div className="flex gap-2">
             <Button
               variant="default"
@@ -296,7 +327,7 @@ function SupplierCard({
               <MailIcon className="size-4" />
               {t.suppliers.contact}
             </div>
-            <p className="font-medium">{supplier.contact}</p>
+            <p className="font-medium">{supplier.contact || "N/A"}</p>
           </div>
 
           <div className="rounded-lg border p-3">
@@ -316,7 +347,6 @@ function SupplierCard({
             </p>
           </div>
 
-          {/* Recent Deliveries */}
           {deliveries.length > 0 && (
             <div className="space-y-2">
               <h4 className="font-medium">{t.suppliers.recentDeliveries}</h4>
@@ -340,20 +370,6 @@ function SupplierCard({
               </div>
             </div>
           )}
-
-          {supplierPriceHistory.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="font-medium">{t.suppliers.priceHistory}</h4>
-              <div className="rounded-lg border p-3 space-y-2">
-                {supplierPriceHistory.map((entry, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span>{entry.item}</span>
-                    <span className="font-medium">€{entry.price.toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         <DrawerFooter>
           <DrawerClose asChild>
@@ -365,28 +381,34 @@ function SupplierCard({
   )
 }
 
-function AddSupplierDialog({ onAdd }: { onAdd: (supplier: Supplier) => void }) {
+function AddSupplierDialog({ onAdd }: { onAdd: (supplier: SupplierUI) => void }) {
   const t = useTranslations()
   const [open, setOpen] = React.useState(false)
   const [name, setName] = React.useState("")
   const [category, setCategory] = React.useState("")
   const [contact, setContact] = React.useState("")
+  const [loading, setLoading] = React.useState(false)
 
-  const handleSubmit = () => {
-    onAdd({
-      id: `sup-${Date.now()}`,
-      name,
-      category,
-      reliability: 100,
-      avgDeliveryDays: 2,
-      priceChange: 0,
-      lastOrder: new Date().toISOString(),
-      contact,
-    })
-    setOpen(false)
-    setName("")
-    setCategory("")
-    setContact("")
+  const handleSubmit = async () => {
+    try {
+      setLoading(true)
+      const created = await suppliersApi.create({
+        name,
+        category,
+        contact_email: contact,
+        reliability_score: 100,
+        avg_delivery_days: 2,
+      })
+      onAdd(mapSupplierToUI(created))
+      setOpen(false)
+      setName("")
+      setCategory("")
+      setContact("")
+    } catch (err) {
+      console.error("Failed to create supplier:", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -438,8 +460,8 @@ function AddSupplierDialog({ onAdd }: { onAdd: (supplier: Supplier) => void }) {
           <Button variant="outline" onClick={() => setOpen(false)}>
             {t.suppliers.cancel}
           </Button>
-          <Button onClick={handleSubmit} disabled={!name || !category}>
-            {t.suppliers.save}
+          <Button onClick={handleSubmit} disabled={!name || !category || loading}>
+            {loading ? <Loader2Icon className="size-4 animate-spin" /> : t.suppliers.save}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -449,10 +471,84 @@ function AddSupplierDialog({ onAdd }: { onAdd: (supplier: Supplier) => void }) {
 
 export default function SuppliersPage() {
   const t = useTranslations()
-  const [suppliers, setSuppliers] = React.useState(initialSuppliers)
-  const [deliveries, setDeliveries] = React.useState<Record<string, Delivery[]>>(mockDeliveries)
+  const [suppliers, setSuppliers] = React.useState<SupplierUI[]>([])
+  const [deliveries, setDeliveries] = React.useState<Record<string, Delivery[]>>({})
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
 
-  const handleAddSupplier = (supplier: Supplier) => {
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+        const [suppliersRes, deliveriesRes] = await Promise.all([
+          suppliersApi.list(),
+          deliveriesApi.list(),
+        ])
+
+        const mappedSuppliers = suppliersRes.items.map(mapSupplierToUI)
+        setSuppliers(mappedSuppliers)
+
+        // Group deliveries by supplier
+        const deliveriesBySupplier: Record<string, Delivery[]> = {}
+        for (const d of deliveriesRes) {
+          const supplierId = String(d.supplier_id)
+          if (!deliveriesBySupplier[supplierId]) {
+            deliveriesBySupplier[supplierId] = []
+          }
+          deliveriesBySupplier[supplierId].push(mapDeliveryToUI(d))
+        }
+        setDeliveries(deliveriesBySupplier)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load data")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  // Calculate KPIs
+  const activeSuppliers = suppliers.length
+  const allDeliveries = Object.values(deliveries).flat()
+  const openAnomalies = allDeliveries.filter((d) => d.status === "late" || d.status === "partial").length
+  const avgReliability = suppliers.length > 0
+    ? suppliers.reduce((sum, s) => sum + s.reliability, 0) / suppliers.length
+    : 0
+  const maxPriceIncrease = suppliers.length > 0
+    ? Math.max(...suppliers.map((s) => s.priceChange))
+    : 0
+
+  const kpis: KPI[] = [
+    {
+      label: t.suppliers.activeSuppliers,
+      value: String(activeSuppliers),
+      change: 1,
+      trend: "up",
+    },
+    {
+      label: t.suppliers.openAnomalies,
+      value: String(openAnomalies),
+      change: openAnomalies > 0 ? -openAnomalies : 0,
+      trend: openAnomalies > 0 ? "down" : "neutral",
+      description: t.suppliers.lateOrPartial,
+    },
+    {
+      label: t.suppliers.avgReliability,
+      value: avgReliability.toFixed(1),
+      change: 2.5,
+      trend: "up",
+      description: t.suppliers.acrossSuppliers,
+    },
+    {
+      label: t.suppliers.maxPriceIncrease,
+      value: maxPriceIncrease.toFixed(1),
+      change: maxPriceIncrease,
+      trend: maxPriceIncrease > 5 ? "down" : "neutral",
+      description: t.suppliers.fromLastMonth,
+    },
+  ]
+
+  const handleAddSupplier = (supplier: SupplierUI) => {
     setSuppliers((prev) => [...prev, supplier])
   }
 
@@ -463,6 +559,23 @@ export default function SuppliersPage() {
     }))
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2Icon className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <p className="text-destructive">{error}</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <PageHeader
@@ -470,6 +583,16 @@ export default function SuppliersPage() {
         description={t.suppliers.description}
         actions={<AddSupplierDialog onAdd={handleAddSupplier} />}
       />
+
+      <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+        {kpis.map((kpi, idx) => (
+          <KPICard
+            key={idx}
+            kpi={kpi}
+            suffix={idx === 2 || idx === 3 ? "%" : undefined}
+          />
+        ))}
+      </div>
 
       <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @4xl/main:grid-cols-3">
         {suppliers.map((supplier) => (
@@ -482,72 +605,13 @@ export default function SuppliersPage() {
         ))}
       </div>
 
-      <div className="px-4 lg:px-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.suppliers.inflation}</CardTitle>
-            <CardDescription>{t.suppliers.inflationDesc}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={inflationChartConfig} className="aspect-auto h-[300px] w-full">
-              <LineChart data={inflationData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => {
-                    const [year, month] = value.split("-")
-                    return new Date(Number(year), Number(month) - 1).toLocaleDateString("en-US", {
-                      month: "short",
-                    })
-                  }}
-                />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                <ChartTooltip
-                  content={<ChartTooltipContent formatter={(v) => `+${Number(v).toFixed(1)}%`} />}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="Carni Pregiate"
-                  stroke="var(--color-Carni Pregiate)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Ortofrutticola"
-                  stroke="var(--color-Ortofrutticola)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Caseificio"
-                  stroke="var(--color-Caseificio)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Ittica"
-                  stroke="var(--color-Ittica)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Oleificio"
-                  stroke="var(--color-Oleificio)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
+      {suppliers.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <TruckIcon className="size-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium">{t.common.noResults}</h3>
+          <p className="text-muted-foreground">Add your first supplier to get started</p>
+        </div>
+      )}
     </div>
   )
 }

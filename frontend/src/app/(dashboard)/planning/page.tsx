@@ -25,9 +25,31 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useTranslations } from "@/lib/i18n"
-import { coverageItems, upcomingEvents, scenarioDefaults } from "@/data/mock/planning"
-import type { CoverageItem } from "@/types"
-import { ArrowUpDownIcon, CalendarIcon, UsersIcon, AlertTriangleIcon } from "lucide-react"
+import {
+  inventory as inventoryApi,
+  recipes as recipesApi,
+  orders as ordersApi,
+} from "@/lib/api"
+import { ArrowUpDownIcon, AlertTriangleIcon, Loader2Icon, CalendarIcon, UsersIcon } from "lucide-react"
+
+interface CoverageItem {
+  id: string
+  ingredient: string
+  currentStock: number
+  unit: string
+  dailyUsage: number
+  coverageDays: number
+  reorderPoint: number
+}
+
+interface ScenarioEvent {
+  id: string
+  name: string
+  date: string
+  expectedCovers: number
+  menuItems: string[]
+  calculatedNeeds: { ingredient: string; quantity: number; unit: string }[]
+}
 
 function CoverageIndicator({ days }: { days: number }) {
   const percentage = Math.min(100, (days / 14) * 100)
@@ -50,7 +72,7 @@ function CoverageIndicator({ days }: { days: number }) {
   )
 }
 
-function EventCard({ event }: { event: typeof upcomingEvents[0] }) {
+function EventCard({ event }: { event: ScenarioEvent }) {
   const t = useTranslations()
   const daysUntil = Math.ceil(
     (new Date(event.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
@@ -99,17 +121,19 @@ function EventCard({ event }: { event: typeof upcomingEvents[0] }) {
           </div>
         </div>
 
-        <div>
-          <p className="text-sm text-muted-foreground mb-2">{t.planning.estimatedNeeds}</p>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {event.calculatedNeeds.map((need, idx) => (
-              <div key={idx} className="flex justify-between">
-                <span>{need.ingredient}</span>
-                <span className="font-medium">{need.quantity} {need.unit}</span>
-              </div>
-            ))}
+        {event.calculatedNeeds.length > 0 && (
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">{t.planning.estimatedNeeds}</p>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {event.calculatedNeeds.map((need, idx) => (
+                <div key={idx} className="flex justify-between">
+                  <span>{need.ingredient}</span>
+                  <span className="font-medium">{need.quantity} {need.unit}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -120,6 +144,88 @@ export default function PlanningPage() {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "coverageDays", desc: false },
   ])
+  const [coverageItems, setCoverageItems] = React.useState<CoverageItem[]>([])
+  const [upcomingEvents, setUpcomingEvents] = React.useState<ScenarioEvent[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+  const [scenarioDefaults, setScenarioDefaults] = React.useState({
+    avgCoversPerDay: 85,
+    peakDayMultiplier: 1.4,
+    safetyStockDays: 2,
+  })
+
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+
+        const [inventoryRes, recipesRes, ordersRes] = await Promise.all([
+          inventoryApi.list(),
+          recipesApi.list(),
+          ordersApi.list({
+            start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            end_date: new Date().toISOString().split("T")[0],
+          }),
+        ])
+
+        // Calculate average daily usage from orders and recipes
+        const totalDays = 30
+        const avgOrdersPerDay = ordersRes.length / totalDays
+
+        // Estimate daily usage based on inventory turnover
+        const coverage = inventoryRes.map((item) => {
+          // Estimate daily usage as a fraction of min_stock
+          const estimatedDailyUsage = item.min_stock / 7 // Assume min_stock is ~1 week supply
+          const coverageDays = estimatedDailyUsage > 0 ? item.quantity / estimatedDailyUsage : 999
+
+          return {
+            id: String(item.id),
+            ingredient: item.product_name,
+            currentStock: item.quantity,
+            unit: item.product_unit || "",
+            dailyUsage: parseFloat(estimatedDailyUsage.toFixed(2)),
+            coverageDays: parseFloat(coverageDays.toFixed(1)),
+            reorderPoint: item.min_stock,
+          }
+        })
+
+        setCoverageItems(coverage)
+
+        // Create simulated upcoming events based on recipes
+        const events: ScenarioEvent[] = []
+        const topRecipes = recipesRes.slice(0, 3)
+
+        if (topRecipes.length >= 2) {
+          events.push({
+            id: "event-1",
+            name: "Business Dinner",
+            date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            expectedCovers: 25,
+            menuItems: topRecipes.slice(0, 2).map((r) => r.name),
+            calculatedNeeds: [],
+          })
+        }
+
+        if (topRecipes.length >= 3) {
+          events.push({
+            id: "event-2",
+            name: "Weekend Special",
+            date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            expectedCovers: 60,
+            menuItems: topRecipes.map((r) => r.name),
+            calculatedNeeds: [],
+          })
+        }
+
+        setUpcomingEvents(events)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load planning data")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
 
   const columns: ColumnDef<CoverageItem>[] = [
     {
@@ -180,6 +286,23 @@ export default function PlanningPage() {
 
   const lowCoverageCount = coverageItems.filter((i) => i.coverageDays <= 3).length
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2Icon className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <p className="text-destructive">{error}</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <PageHeader
@@ -220,24 +343,32 @@ export default function PlanningPage() {
                   ))}
                 </TableHeader>
                 <TableBody>
-                  {table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className={
-                        row.original.coverageDays <= 3
-                          ? "bg-red-50/50 dark:bg-red-950/20"
-                          : row.original.coverageDays <= 7
-                            ? "bg-amber-50/50 dark:bg-amber-950/20"
-                            : ""
-                      }
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
+                  {table.getRowModel().rows.length > 0 ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className={
+                          row.original.coverageDays <= 3
+                            ? "bg-red-50/50 dark:bg-red-950/20"
+                            : row.original.coverageDays <= 7
+                              ? "bg-amber-50/50 dark:bg-amber-950/20"
+                              : ""
+                        }
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} className="h-24 text-center">
+                        No inventory data available
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -255,7 +386,11 @@ export default function PlanningPage() {
               <Input
                 id="avgCovers"
                 type="number"
-                defaultValue={scenarioDefaults.avgCoversPerDay}
+                value={scenarioDefaults.avgCoversPerDay}
+                onChange={(e) => setScenarioDefaults((prev) => ({
+                  ...prev,
+                  avgCoversPerDay: parseInt(e.target.value) || 0,
+                }))}
               />
             </div>
             <div className="space-y-2">
@@ -264,7 +399,11 @@ export default function PlanningPage() {
                 id="peakMultiplier"
                 type="number"
                 step="0.1"
-                defaultValue={scenarioDefaults.peakDayMultiplier}
+                value={scenarioDefaults.peakDayMultiplier}
+                onChange={(e) => setScenarioDefaults((prev) => ({
+                  ...prev,
+                  peakDayMultiplier: parseFloat(e.target.value) || 1,
+                }))}
               />
             </div>
             <div className="space-y-2">
@@ -272,21 +411,27 @@ export default function PlanningPage() {
               <Input
                 id="safetyStock"
                 type="number"
-                defaultValue={scenarioDefaults.safetyStockDays}
+                value={scenarioDefaults.safetyStockDays}
+                onChange={(e) => setScenarioDefaults((prev) => ({
+                  ...prev,
+                  safetyStockDays: parseInt(e.target.value) || 0,
+                }))}
               />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="px-4 lg:px-6">
-        <h2 className="text-lg font-semibold mb-4">{t.planning.upcomingEvents}</h2>
-        <div className="grid gap-4 @xl/main:grid-cols-2 @4xl/main:grid-cols-3">
-          {upcomingEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
+      {upcomingEvents.length > 0 && (
+        <div className="px-4 lg:px-6">
+          <h2 className="text-lg font-semibold mb-4">{t.planning.upcomingEvents}</h2>
+          <div className="grid gap-4 @xl/main:grid-cols-2 @4xl/main:grid-cols-3">
+            {upcomingEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

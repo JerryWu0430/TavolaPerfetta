@@ -299,6 +299,117 @@ export const locations = {
     fetchAPI<{ ok: boolean }>(`/locations/${id}`, { method: "DELETE" }),
 }
 
+// Recipes
+export interface RecipeIngredient {
+  id: number
+  product_id: number
+  quantity: number
+  unit: string | null
+  product_name?: string | null
+  product_unit_price?: number | null
+}
+
+export interface Recipe {
+  id: number
+  name: string
+  category: string | null
+  price: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  cost: number
+  margin: number
+  ingredients: RecipeIngredient[]
+}
+
+export interface RecipeListItem {
+  id: number
+  name: string
+  category: string | null
+  price: number
+  is_active: boolean
+  cost: number
+  margin: number
+  sales_per_week: number
+}
+
+export const recipes = {
+  list: (params?: { category?: string; is_active?: boolean }) => {
+    const query = new URLSearchParams()
+    if (params?.category) query.set("category", params.category)
+    if (params?.is_active !== undefined) query.set("is_active", String(params.is_active))
+    return fetchAPI<RecipeListItem[]>(`/recipes${query.toString() ? `?${query}` : ""}`)
+  },
+  get: (id: number) => fetchAPI<Recipe>(`/recipes/${id}`),
+  create: (data: {
+    name: string
+    category?: string
+    price?: number
+    is_active?: boolean
+    ingredients?: Array<{ product_id: number; quantity: number; unit?: string }>
+  }) => fetchAPI<Recipe>("/recipes", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Recipe> & { ingredients?: Array<{ product_id: number; quantity: number; unit?: string }> }) =>
+    fetchAPI<Recipe>(`/recipes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    fetchAPI<{ ok: boolean }>(`/recipes/${id}`, { method: "DELETE" }),
+}
+
+// Orders
+export interface OrderItem {
+  id: number
+  recipe_id: number
+  quantity: number
+  unit_price: number
+  recipe_name?: string | null
+}
+
+export interface Order {
+  id: number
+  location_id: number | null
+  date: string
+  total: number
+  created_at: string
+  items: OrderItem[]
+}
+
+export const orders = {
+  list: (params?: { location_id?: number; start_date?: string; end_date?: string }) => {
+    const query = new URLSearchParams()
+    if (params?.location_id) query.set("location_id", String(params.location_id))
+    if (params?.start_date) query.set("start_date", params.start_date)
+    if (params?.end_date) query.set("end_date", params.end_date)
+    return fetchAPI<Order[]>(`/orders${query.toString() ? `?${query}` : ""}`)
+  },
+  get: (id: number) => fetchAPI<Order>(`/orders/${id}`),
+  create: (data: {
+    location_id?: number
+    date: string
+    items: Array<{ recipe_id: number; quantity: number; unit_price: number }>
+  }) => fetchAPI<Order>("/orders", { method: "POST", body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    fetchAPI<{ ok: boolean }>(`/orders/${id}`, { method: "DELETE" }),
+}
+
+// Price History
+export interface PriceHistoryRecord {
+  id: number
+  product_id: number
+  price: number
+  recorded_at: string
+}
+
+export const priceHistory = {
+  list: (params?: { product_id?: number; start_date?: string; end_date?: string }) => {
+    const query = new URLSearchParams()
+    if (params?.product_id) query.set("product_id", String(params.product_id))
+    if (params?.start_date) query.set("start_date", params.start_date)
+    if (params?.end_date) query.set("end_date", params.end_date)
+    return fetchAPI<PriceHistoryRecord[]>(`/price-history${query.toString() ? `?${query}` : ""}`)
+  },
+  create: (data: { product_id: number; price: number }) =>
+    fetchAPI<PriceHistoryRecord>("/price-history", { method: "POST", body: JSON.stringify(data) }),
+}
+
 // OCR
 export interface OCRLine {
   description: string
