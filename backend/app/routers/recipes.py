@@ -12,6 +12,7 @@ from ..schemas.recipe import (
     RecipeResponse,
     RecipeListResponse,
     RecipeIngredientResponse,
+    WeeklySales,
 )
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -78,8 +79,40 @@ def list_recipes(
     return result
 
 
+def get_weekly_sales(recipe_id: int, db: Session) -> list[WeeklySales]:
+    """Get sales for last 4 weeks."""
+    result = []
+    now = datetime.now()
+    for i in range(4, 0, -1):  # W1=oldest, W4=most recent
+        week_start = now - timedelta(days=7 * i)
+        week_end = now - timedelta(days=7 * (i - 1))
+        sales = db.query(func.sum(OrderItem.quantity)).join(Order).filter(
+            OrderItem.recipe_id == recipe_id,
+            Order.date >= week_start.date(),
+            Order.date < week_end.date()
+        ).scalar() or 0
+        result.append(WeeklySales(week=f"W{5 - i}", quantity=int(sales)))
+    return result
+
+
+def is_best_seller(recipe_id: int, db: Session) -> bool:
+    """Check if recipe is in top 3 by sales in last 4 weeks."""
+    four_weeks_ago = datetime.now() - timedelta(days=28)
+    top_recipes = db.query(
+        OrderItem.recipe_id,
+        func.sum(OrderItem.quantity).label("total")
+    ).join(Order).filter(
+        Order.date >= four_weeks_ago.date()
+    ).group_by(OrderItem.recipe_id).order_by(
+        func.sum(OrderItem.quantity).desc()
+    ).limit(3).all()
+    return recipe_id in [r[0] for r in top_recipes]
+
+
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    from ..models.supplier import Supplier
+
     recipe = db.query(Recipe).options(
         joinedload(Recipe.ingredients).joinedload(RecipeIngredient.product)
     ).filter(Recipe.id == recipe_id).first()
@@ -89,30 +122,46 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
 
     cost = calculate_cost(recipe.ingredients, db)
     margin = calculate_margin(recipe.price, cost)
+    margin_value = recipe.price - cost
 
-    # Build ingredient responses with product info
+    # Build ingredient responses with product and supplier info
     ingredients = []
     for ing in recipe.ingredients:
+        ing_cost = ing.quantity * (ing.product.unit_price if ing.product else 0)
+        supplier_name = None
+        if ing.product and ing.product.supplier_id:
+            supplier = db.query(Supplier).filter(Supplier.id == ing.product.supplier_id).first()
+            supplier_name = supplier.name if supplier else None
         ingredients.append(RecipeIngredientResponse(
             id=ing.id,
             product_id=ing.product_id,
             quantity=ing.quantity,
             unit=ing.unit,
+            waste_pct=ing.waste_pct or 0.0,
             product_name=ing.product.name if ing.product else None,
             product_unit_price=ing.product.unit_price if ing.product else None,
+            supplier_name=supplier_name,
+            cost=round(ing_cost, 2),
         ))
+
+    weekly_sales = get_weekly_sales(recipe_id, db)
+    best_seller = is_best_seller(recipe_id, db)
 
     return RecipeResponse(
         id=recipe.id,
         name=recipe.name,
         category=recipe.category,
+        description=recipe.description,
         price=recipe.price,
         is_active=recipe.is_active,
         created_at=recipe.created_at,
         updated_at=recipe.updated_at,
         cost=round(cost, 2),
         margin=round(margin, 1),
+        margin_value=round(margin_value, 2),
         ingredients=ingredients,
+        weekly_sales=weekly_sales,
+        is_best_seller=best_seller,
     )
 
 
@@ -121,6 +170,7 @@ def create_recipe(data: RecipeCreate, db: Session = Depends(get_db)):
     recipe = Recipe(
         name=data.name,
         category=data.category,
+        description=data.description,
         price=data.price,
         is_active=data.is_active,
     )
@@ -134,6 +184,7 @@ def create_recipe(data: RecipeCreate, db: Session = Depends(get_db)):
             product_id=ing_data.product_id,
             quantity=ing_data.quantity,
             unit=ing_data.unit,
+            waste_pct=ing_data.waste_pct,
         )
         db.add(ingredient)
 
@@ -167,6 +218,7 @@ def update_recipe(recipe_id: int, data: RecipeUpdate, db: Session = Depends(get_
                 product_id=ing_data.product_id,
                 quantity=ing_data.quantity,
                 unit=ing_data.unit,
+                waste_pct=ing_data.waste_pct,
             )
             db.add(ingredient)
 

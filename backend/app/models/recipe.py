@@ -9,6 +9,7 @@ class Recipe(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     category = Column(String(50))  # antipasti, primi, secondi, dolci
+    description = Column(String(500))
     price = Column(Float, default=0.0)  # selling price
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -25,6 +26,7 @@ class RecipeIngredient(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     quantity = Column(Float, nullable=False)
     unit = Column(String(20))
+    waste_pct = Column(Float, default=0.0)  # waste percentage 0-100
 
     recipe = relationship("Recipe", back_populates="ingredients")
     product = relationship("Product", backref="recipe_ingredients")

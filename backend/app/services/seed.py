@@ -257,81 +257,89 @@ def seed_recipes(db: Session):
         {
             "name": "Spaghetti alla Carbonara",
             "category": "primi",
+            "description": "Ricetta romana tradizionale con guanciale e uova.",
             "price": 14.00,
             "ingredients": [
-                ("Spaghetti De Cecco", 0.12, "kg"),
-                ("Guanciale", 0.05, "kg"),
-                ("Parmigiano Reggiano 24 mesi", 0.03, "kg"),
+                ("Spaghetti De Cecco", 0.12, "kg", 2),
+                ("Guanciale", 0.05, "kg", 5),
+                ("Parmigiano Reggiano 24 mesi", 0.03, "kg", 1),
             ]
         },
         {
             "name": "Risotto alla Milanese",
             "category": "primi",
+            "description": "Cremoso risotto allo zafferano, specialità milanese.",
             "price": 16.00,
             "ingredients": [
-                ("Burro", 0.03, "kg"),
-                ("Parmigiano Reggiano 24 mesi", 0.04, "kg"),
-                ("Cipolle dorate", 0.03, "kg"),
+                ("Burro", 0.03, "kg", 0),
+                ("Parmigiano Reggiano 24 mesi", 0.04, "kg", 1),
+                ("Cipolle dorate", 0.03, "kg", 10),
             ]
         },
         {
             "name": "Tagliatelle al Ragù",
             "category": "primi",
+            "description": "Ragù bolognese cotto a fuoco lento per ore.",
             "price": 15.00,
             "ingredients": [
-                ("Manzo macinato", 0.1, "kg"),
-                ("Pomodori San Marzano", 0.15, "kg"),
-                ("Cipolle dorate", 0.03, "kg"),
+                ("Manzo macinato", 0.1, "kg", 3),
+                ("Pomodori San Marzano", 0.15, "kg", 5),
+                ("Cipolle dorate", 0.03, "kg", 10),
             ]
         },
         {
             "name": "Spaghetti alle Vongole",
             "category": "primi",
+            "description": "Vongole veraci fresche con aglio e prezzemolo.",
             "price": 18.00,
             "ingredients": [
-                ("Spaghetti De Cecco", 0.12, "kg"),
-                ("Vongole veraci", 0.25, "kg"),
-                ("Aglio", 0.01, "kg"),
-                ("Olio EVO Toscano", 0.02, "l"),
+                ("Spaghetti De Cecco", 0.12, "kg", 2),
+                ("Vongole veraci", 0.25, "kg", 15),
+                ("Aglio", 0.01, "kg", 5),
+                ("Olio EVO Toscano", 0.02, "l", 0),
             ]
         },
         {
             "name": "Gamberi alla Griglia",
             "category": "secondi",
+            "description": "Gamberi freschi grigliati con erbe aromatiche.",
             "price": 24.00,
             "ingredients": [
-                ("Gamberi freschi", 0.2, "kg"),
-                ("Olio EVO Toscano", 0.02, "l"),
-                ("Aglio", 0.005, "kg"),
+                ("Gamberi freschi", 0.2, "kg", 20),
+                ("Olio EVO Toscano", 0.02, "l", 0),
+                ("Aglio", 0.005, "kg", 5),
             ]
         },
         {
             "name": "Calamari Fritti",
             "category": "secondi",
+            "description": "Calamari freschi fritti in pastella leggera.",
             "price": 18.00,
             "ingredients": [
-                ("Calamari", 0.2, "kg"),
-                ("Farina 00", 0.05, "kg"),
+                ("Calamari", 0.2, "kg", 10),
+                ("Farina 00", 0.05, "kg", 0),
             ]
         },
         {
             "name": "Caprese",
             "category": "antipasti",
+            "description": "Mozzarella di bufala con pomodori e basilico fresco.",
             "price": 12.00,
             "ingredients": [
-                ("Mozzarella di Bufala", 0.125, "kg"),
-                ("Pomodori San Marzano", 0.15, "kg"),
-                ("Basilico fresco", 0.5, "bunch"),
-                ("Olio EVO Toscano", 0.02, "l"),
+                ("Mozzarella di Bufala", 0.125, "kg", 2),
+                ("Pomodori San Marzano", 0.15, "kg", 5),
+                ("Basilico fresco", 0.5, "bunch", 20),
+                ("Olio EVO Toscano", 0.02, "l", 0),
             ]
         },
         {
             "name": "Tiramisù",
             "category": "dolci",
+            "description": "Classico tiramisù con savoiardi artigianali.",
             "price": 8.00,
             "ingredients": [
-                ("Ricotta fresca", 0.08, "kg"),
-                ("Panna fresca", 0.05, "l"),
+                ("Ricotta fresca", 0.08, "kg", 1),
+                ("Panna fresca", 0.05, "l", 0),
             ]
         },
     ]
@@ -340,19 +348,23 @@ def seed_recipes(db: Session):
         recipe = Recipe(
             name=data["name"],
             category=data["category"],
+            description=data.get("description"),
             price=data["price"],
             is_active=True
         )
         db.add(recipe)
         db.flush()
 
-        for ing_name, qty, unit in data["ingredients"]:
+        for ing_tuple in data["ingredients"]:
+            ing_name, qty, unit = ing_tuple[0], ing_tuple[1], ing_tuple[2]
+            waste_pct = ing_tuple[3] if len(ing_tuple) > 3 else 0
             if ing_name in products:
                 ingredient = RecipeIngredient(
                     recipe_id=recipe.id,
                     product_id=products[ing_name].id,
                     quantity=qty,
-                    unit=unit
+                    unit=unit,
+                    waste_pct=waste_pct
                 )
                 db.add(ingredient)
 

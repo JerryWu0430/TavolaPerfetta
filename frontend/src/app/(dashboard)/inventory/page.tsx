@@ -20,6 +20,29 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -29,9 +52,19 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useTranslations } from "@/lib/i18n"
-import { inventory, type InventoryItem as APIInventoryItem } from "@/lib/api"
+import { inventory, products, type InventoryItem as APIInventoryItem } from "@/lib/api"
 import type { Alert } from "@/types"
-import { ArrowUpDownIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, Loader2Icon } from "lucide-react"
+import {
+  ArrowUpDownIcon,
+  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  Loader2Icon,
+  PlusIcon,
+  MoreHorizontalIcon,
+  PackageIcon,
+  Trash2Icon,
+} from "lucide-react"
 
 type StockLevel = "critical" | "low" | "normal" | "excess"
 
@@ -70,6 +103,336 @@ function StockProgress({ item }: { item: InventoryItemUI }) {
   )
 }
 
+function AddItemDialog({ onAdd }: { onAdd: () => void }) {
+  const t = useTranslations()
+  const [open, setOpen] = React.useState(false)
+  const [loading, setLoading] = React.useState(false)
+  const [name, setName] = React.useState("")
+  const [category, setCategory] = React.useState("")
+  const [unit, setUnit] = React.useState("")
+  const [unitPrice, setUnitPrice] = React.useState("")
+  const [minStock, setMinStock] = React.useState("")
+  const [initialQty, setInitialQty] = React.useState("")
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true)
+      // Create product first
+      const product = await products.create({
+        name,
+        category: category || undefined,
+        unit: unit || undefined,
+        unit_price: parseFloat(unitPrice) || 0,
+        min_stock: parseFloat(minStock) || 0,
+      })
+      // Then create inventory entry with initial quantity
+      if (initialQty) {
+        await inventory.recordCount(product.id, parseFloat(initialQty) || 0)
+      }
+      setOpen(false)
+      setName("")
+      setCategory("")
+      setUnit("")
+      setUnitPrice("")
+      setMinStock("")
+      setInitialQty("")
+      onAdd()
+    } catch (err) {
+      console.error("Failed to add item:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button>
+            <PlusIcon className="size-4 mr-2" />
+            {t.inventory.addItem}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t.inventory.addItem}</DialogTitle>
+          <DialogDescription>{t.inventory.addItemDesc}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">{t.inventory.itemName}</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Pomodoro San Marzano"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="category">{t.products.category}</Label>
+              <Select value={category} onValueChange={(v) => v && setCategory(v)}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder={t.products.selectCategory} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vegetable">{t.inventory.categories.vegetable}</SelectItem>
+                  <SelectItem value="meat">{t.inventory.categories.meat}</SelectItem>
+                  <SelectItem value="dairy">{t.inventory.categories.dairy}</SelectItem>
+                  <SelectItem value="seafood">{t.inventory.categories.seafood}</SelectItem>
+                  <SelectItem value="grain">{t.inventory.categories.grain}</SelectItem>
+                  <SelectItem value="spice">{t.inventory.categories.spice}</SelectItem>
+                  <SelectItem value="other">{t.inventory.categories.other}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="unit">{t.inventory.unit}</Label>
+              <Select value={unit} onValueChange={(v) => v && setUnit(v)}>
+                <SelectTrigger id="unit">
+                  <SelectValue placeholder={t.inventory.selectUnit} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kg">kg</SelectItem>
+                  <SelectItem value="g">g</SelectItem>
+                  <SelectItem value="l">L</SelectItem>
+                  <SelectItem value="ml">ml</SelectItem>
+                  <SelectItem value="pcs">{t.inventory.pieces}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="unitPrice">{t.inventory.unitPrice}</Label>
+              <Input
+                id="unitPrice"
+                type="number"
+                step="0.01"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="minStock">{t.inventory.minStock}</Label>
+              <Input
+                id="minStock"
+                type="number"
+                step="0.1"
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="initialQty">{t.inventory.initialQty}</Label>
+            <Input
+              id="initialQty"
+              type="number"
+              step="0.1"
+              value={initialQty}
+              onChange={(e) => setInitialQty(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            {t.products.cancel}
+          </Button>
+          <Button onClick={handleSubmit} disabled={!name || loading}>
+            {loading ? <Loader2Icon className="size-4 animate-spin" /> : t.products.save}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function UpdateStockDialog({
+  item,
+  onUpdate,
+}: {
+  item: InventoryItemUI
+  onUpdate: (newQty: number) => void
+}) {
+  const t = useTranslations()
+  const [open, setOpen] = React.useState(false)
+  const [loading, setLoading] = React.useState(false)
+  const [quantity, setQuantity] = React.useState(String(item.quantity))
+
+  React.useEffect(() => {
+    if (open) setQuantity(String(item.quantity))
+  }, [open, item.quantity])
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true)
+      const newQty = parseFloat(quantity) || 0
+      await inventory.update(item.id, { quantity: newQty })
+      onUpdate(newQty)
+      setOpen(false)
+    } catch (err) {
+      console.error("Failed to update stock:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+            <PackageIcon className="size-4 mr-2" />
+            {t.inventory.updateStock}
+          </DropdownMenuItem>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t.inventory.updateStock}</DialogTitle>
+          <DialogDescription>{item.product_name}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="currentQty">{t.inventory.currentQty}</Label>
+            <p className="text-sm text-muted-foreground">
+              {item.quantity} {item.product_unit}
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="newQty">{t.inventory.newQty}</Label>
+            <div className="flex gap-2 items-center">
+              <Input
+                id="newQty"
+                type="number"
+                step="0.1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+              <span className="text-sm text-muted-foreground">{item.product_unit}</span>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            {t.products.cancel}
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? <Loader2Icon className="size-4 animate-spin" /> : t.products.save}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function WasteDialog({
+  item,
+  onWaste,
+}: {
+  item: InventoryItemUI
+  onWaste: (newQty: number) => void
+}) {
+  const t = useTranslations()
+  const [open, setOpen] = React.useState(false)
+  const [loading, setLoading] = React.useState(false)
+  const [wasteAmount, setWasteAmount] = React.useState("")
+  const [reason, setReason] = React.useState("")
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true)
+      const waste = parseFloat(wasteAmount) || 0
+      const newQty = Math.max(0, item.quantity - waste)
+      await inventory.update(item.id, { quantity: newQty })
+      onWaste(newQty)
+      setOpen(false)
+      setWasteAmount("")
+      setReason("")
+    } catch (err) {
+      console.error("Failed to log waste:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600">
+            <Trash2Icon className="size-4 mr-2" />
+            {t.inventory.logWaste}
+          </DropdownMenuItem>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t.inventory.logWaste}</DialogTitle>
+          <DialogDescription>{item.product_name}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label>{t.inventory.currentQty}</Label>
+            <p className="text-sm text-muted-foreground">
+              {item.quantity} {item.product_unit}
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="wasteAmount">{t.inventory.wasteAmount}</Label>
+            <div className="flex gap-2 items-center">
+              <Input
+                id="wasteAmount"
+                type="number"
+                step="0.1"
+                min="0"
+                max={item.quantity}
+                value={wasteAmount}
+                onChange={(e) => setWasteAmount(e.target.value)}
+                placeholder="0"
+              />
+              <span className="text-sm text-muted-foreground">{item.product_unit}</span>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="reason">{t.inventory.wasteReason}</Label>
+            <Select value={reason} onValueChange={(v) => v && setReason(v)}>
+              <SelectTrigger id="reason">
+                <SelectValue placeholder={t.inventory.selectReason} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expired">{t.inventory.reasons.expired}</SelectItem>
+                <SelectItem value="damaged">{t.inventory.reasons.damaged}</SelectItem>
+                <SelectItem value="spoiled">{t.inventory.reasons.spoiled}</SelectItem>
+                <SelectItem value="overproduction">{t.inventory.reasons.overproduction}</SelectItem>
+                <SelectItem value="other">{t.inventory.reasons.other}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {wasteAmount && (
+            <p className="text-sm">
+              {t.inventory.newQtyAfterWaste}: <span className="font-medium">{Math.max(0, item.quantity - (parseFloat(wasteAmount) || 0))} {item.product_unit}</span>
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            {t.products.cancel}
+          </Button>
+          <Button variant="destructive" onClick={handleSubmit} disabled={!wasteAmount || loading}>
+            {loading ? <Loader2Icon className="size-4 animate-spin" /> : t.inventory.confirmWaste}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function InventoryPage() {
   const t = useTranslations()
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -78,20 +441,31 @@ export default function InventoryPage() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    async function fetchInventory() {
-      try {
-        setLoading(true)
-        const data = await inventory.list()
-        setInventoryItems(data.map(mapToUI))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load inventory")
-      } finally {
-        setLoading(false)
-      }
+  const fetchInventory = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await inventory.list()
+      setInventoryItems(data.map(mapToUI))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load inventory")
+    } finally {
+      setLoading(false)
     }
-    fetchInventory()
   }, [])
+
+  React.useEffect(() => {
+    fetchInventory()
+  }, [fetchInventory])
+
+  const handleUpdateQuantity = (itemId: number, newQty: number) => {
+    setInventoryItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, quantity: newQty, stockLevel: getStockLevel(newQty, item.min_stock) }
+          : item
+      )
+    )
+  }
 
   const columns: ColumnDef<InventoryItemUI>[] = [
     {
@@ -141,6 +515,31 @@ export default function InventoryPage() {
       id: "progress",
       header: t.inventory.stock,
       cell: ({ row }) => <StockProgress item={row.original} />,
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon">
+                <MoreHorizontalIcon className="size-4" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <UpdateStockDialog
+              item={row.original}
+              onUpdate={(newQty) => handleUpdateQuantity(row.original.id, newQty)}
+            />
+            <WasteDialog
+              item={row.original}
+              onWaste={(newQty) => handleUpdateQuantity(row.original.id, newQty)}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
     },
   ]
 
@@ -192,6 +591,7 @@ export default function InventoryPage() {
       <PageHeader
         title={t.inventory.title}
         description={t.inventory.description}
+        actions={<AddItemDialog onAdd={fetchInventory} />}
       />
 
       <div className="px-4 lg:px-6">

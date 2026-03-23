@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   flexRender,
   getCoreRowModel,
@@ -11,7 +12,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts"
 
 import { PageHeader } from "@/components/page-header"
 import { KPICard } from "@/components/kpi-card"
@@ -38,16 +39,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -60,12 +51,12 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { useIsMobile } from "@/hooks/use-mobile"
 import { useTranslations } from "@/lib/i18n"
 import {
   recipes as recipesApi,
-  type Recipe,
+  products as productsApi,
   type RecipeListItem,
+  type Product,
 } from "@/lib/api"
 import { formatEUR } from "@/types"
 import type { KPI } from "@/types"
@@ -79,6 +70,7 @@ import {
   PlusIcon,
   Loader2Icon,
   UtensilsCrossedIcon,
+  Trash2Icon,
 } from "lucide-react"
 
 interface DishUI {
@@ -91,6 +83,7 @@ interface DishUI {
   salesTrend: number
   ingredients: {
     id: string
+    product_id: number
     name: string
     quantity: number
     unit: string
@@ -105,146 +98,73 @@ function mapRecipeToUI(r: RecipeListItem): DishUI {
     category: r.category || "General",
     price: r.price,
     cost: r.cost,
-    margin: r.margin,
+    margin: Math.max(0, r.margin),
     salesTrend: r.sales_per_week,
     ingredients: [],
   }
 }
 
-function mapFullRecipeToUI(r: Recipe): DishUI {
-  return {
-    id: String(r.id),
-    name: r.name,
-    category: r.category || "General",
-    price: r.price,
-    cost: r.cost,
-    margin: r.margin,
-    salesTrend: 0,
-    ingredients: r.ingredients.map((ing) => ({
-      id: String(ing.id),
-      name: ing.product_name || `Product ${ing.product_id}`,
-      quantity: ing.quantity,
-      unit: ing.unit || "",
-      cost: (ing.product_unit_price || 0) * ing.quantity,
-    })),
-  }
+const categoryColors: Record<string, string> = {
+  antipasti: "#f97316", // orange
+  primi: "#eab308", // yellow
+  secondi: "#ef4444", // red
+  dolci: "#ec4899", // pink
 }
 
 const chartConfig = {
-  margin: {
-    label: "Margin %",
-    color: "var(--chart-1)",
-  },
+  margin: { label: "Margin %" },
+  antipasti: { label: "Antipasti", color: "#f97316" },
+  primi: { label: "Primi", color: "#eab308" },
+  secondi: { label: "Secondi", color: "#ef4444" },
+  dolci: { label: "Dolci", color: "#ec4899" },
 } satisfies ChartConfig
 
-function RecipeDrawer({ dish, onLoadDetails }: { dish: DishUI; onLoadDetails: (id: string) => Promise<DishUI> }) {
-  const t = useTranslations()
-  const isMobile = useIsMobile()
-  const [fullDish, setFullDish] = React.useState<DishUI | null>(null)
-  const [loading, setLoading] = React.useState(false)
-
-  const handleOpen = async (open: boolean) => {
-    if (open && !fullDish) {
-      setLoading(true)
-      try {
-        const details = await onLoadDetails(dish.id)
-        setFullDish(details)
-      } catch (err) {
-        console.error("Failed to load recipe details:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-  }
-
-  const displayDish = fullDish || dish
-  const totalCost = displayDish.ingredients.reduce((sum, ing) => sum + ing.cost, 0)
-
-  return (
-    <Drawer direction={isMobile ? "bottom" : "right"} onOpenChange={handleOpen}>
-      <DrawerTrigger asChild>
-        <Button variant="link" className="w-fit px-0 text-left text-foreground">{dish.name}</Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader>
-          <DrawerTitle>{displayDish.name}</DrawerTitle>
-          <DrawerDescription>{t.products.recipeDetail}</DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-lg border p-3">
-              <p className="text-sm text-muted-foreground">{t.products.price}</p>
-              <p className="text-xl font-semibold">{formatEUR(displayDish.price)}</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-sm text-muted-foreground">{t.products.cost}</p>
-              <p className="text-xl font-semibold">{formatEUR(displayDish.cost)}</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-sm text-muted-foreground">{t.products.margin}</p>
-              <p className="text-xl font-semibold">{displayDish.margin.toFixed(1)}%</p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-medium">{t.products.ingredients}</h4>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : displayDish.ingredients.length > 0 ? (
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t.products.ingredient}</TableHead>
-                      <TableHead className="text-right">{t.products.quantity}</TableHead>
-                      <TableHead className="text-right">{t.products.cost}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {displayDish.ingredients.map((ing) => (
-                      <TableRow key={ing.id}>
-                        <TableCell>{ing.name}</TableCell>
-                        <TableCell className="text-right">
-                          {ing.quantity} {ing.unit}
-                        </TableCell>
-                        <TableCell className="text-right">{formatEUR(ing.cost)}</TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/50">
-                      <TableCell colSpan={2} className="font-medium">
-                        {t.products.total}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatEUR(totalCost)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-4 text-center">No ingredients defined</p>
-            )}
-          </div>
-        </div>
-        <DrawerFooter>
-          <DrawerClose asChild>
-            <Button variant="outline">{t.products.close}</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
-  )
+interface IngredientInput {
+  product_id: number
+  quantity: number
+  unit: string
+  product_name?: string
 }
 
-function AddRecipeDialog({ onAdd }: { onAdd: (recipe: DishUI) => void }) {
+function AddRecipeDialog({ onAdd, availableProducts }: { onAdd: () => void; availableProducts: Product[] }) {
   const t = useTranslations()
   const [open, setOpen] = React.useState(false)
   const [name, setName] = React.useState("")
   const [category, setCategory] = React.useState("")
   const [price, setPrice] = React.useState("")
+  const [ingredients, setIngredients] = React.useState<IngredientInput[]>([])
   const [loading, setLoading] = React.useState(false)
+
+  // For adding new ingredient
+  const [selectedProductId, setSelectedProductId] = React.useState<string>("")
+  const [ingredientQty, setIngredientQty] = React.useState("")
+  const [ingredientSearch, setIngredientSearch] = React.useState("")
+
+  const filteredProducts = availableProducts.filter((p) =>
+    p.name.toLowerCase().includes(ingredientSearch.toLowerCase())
+  )
+
+  const handleAddIngredient = () => {
+    if (!selectedProductId || !ingredientQty) return
+    const product = availableProducts.find((p) => p.id === parseInt(selectedProductId))
+    if (!product) return
+
+    setIngredients((prev) => [
+      ...prev,
+      {
+        product_id: product.id,
+        quantity: parseFloat(ingredientQty),
+        unit: product.unit || "",
+        product_name: product.name,
+      },
+    ])
+    setSelectedProductId("")
+    setIngredientQty("")
+  }
+
+  const handleRemoveIngredient = (index: number) => {
+    setIngredients((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async () => {
     try {
@@ -254,18 +174,26 @@ function AddRecipeDialog({ onAdd }: { onAdd: (recipe: DishUI) => void }) {
         category,
         price: parseFloat(price) || 0,
         is_active: true,
+        ingredients: ingredients.map((ing) => ({
+          product_id: ing.product_id,
+          quantity: ing.quantity,
+          unit: ing.unit,
+        })),
       })
-      onAdd(mapFullRecipeToUI(created))
       setOpen(false)
+      onAdd()
       setName("")
       setCategory("")
       setPrice("")
+      setIngredients([])
     } catch (err) {
       console.error("Failed to create recipe:", err)
     } finally {
       setLoading(false)
     }
   }
+
+  const selectedProduct = selectedProductId ? availableProducts.find((p) => p.id === parseInt(selectedProductId)) : null
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -277,34 +205,36 @@ function AddRecipeDialog({ onAdd }: { onAdd: (recipe: DishUI) => void }) {
           </Button>
         }
       />
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t.products.newRecipe}</DialogTitle>
           <DialogDescription>{t.products.description}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="name">{t.products.recipeName}</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Risotto alla Milanese"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="category">{t.products.category}</Label>
-            <Select value={category} onValueChange={(v) => v && setCategory(v)}>
-              <SelectTrigger id="category">
-                <SelectValue placeholder={t.products.selectCategory} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="antipasti">{t.products.antipasti}</SelectItem>
-                <SelectItem value="primi">{t.products.primi}</SelectItem>
-                <SelectItem value="secondi">{t.products.secondi}</SelectItem>
-                <SelectItem value="dolci">{t.products.dolci}</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">{t.products.recipeName}</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Risotto alla Milanese"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="category">{t.products.category}</Label>
+              <Select value={category} onValueChange={(v) => v && setCategory(v)}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder={t.products.selectCategory} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="antipasti">{t.products.antipasti}</SelectItem>
+                  <SelectItem value="primi">{t.products.primi}</SelectItem>
+                  <SelectItem value="secondi">{t.products.secondi}</SelectItem>
+                  <SelectItem value="dolci">{t.products.dolci}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="price">{t.products.sellingPrice}</Label>
@@ -316,6 +246,100 @@ function AddRecipeDialog({ onAdd }: { onAdd: (recipe: DishUI) => void }) {
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0.00"
             />
+          </div>
+
+          {/* Ingredients Section */}
+          <div className="space-y-3">
+            <Label>{t.products.ingredients}</Label>
+
+            {/* Table-like ingredient input */}
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[250px]">{t.products.ingredient}</TableHead>
+                    <TableHead className="w-28 text-right">{t.products.quantity}</TableHead>
+                    <TableHead className="w-20">Unit</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {/* Existing ingredients */}
+                  {ingredients.map((ing, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{ing.product_name}</TableCell>
+                      <TableCell className="text-right">{ing.quantity}</TableCell>
+                      <TableCell className="text-muted-foreground">{ing.unit}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => handleRemoveIngredient(idx)}
+                        >
+                          <Trash2Icon className="size-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {/* Add new row */}
+                  <TableRow className="bg-muted/30">
+                    <TableCell className="p-2">
+                      <Select value={selectedProductId} onValueChange={(v) => v && setSelectedProductId(v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select ingredient..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="p-2">
+                            <Input
+                              placeholder="Search..."
+                              value={ingredientSearch}
+                              onChange={(e) => setIngredientSearch(e.target.value)}
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="max-h-[200px] overflow-y-auto">
+                            {filteredProducts.map((p) => (
+                              <SelectItem key={p.id} value={String(p.id)}>
+                                {p.name}
+                              </SelectItem>
+                            ))}
+                            {filteredProducts.length === 0 && (
+                              <p className="p-2 text-sm text-muted-foreground text-center">No results</p>
+                            )}
+                          </div>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="p-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={ingredientQty}
+                        onChange={(e) => setIngredientQty(e.target.value)}
+                        className="w-full text-right"
+                      />
+                    </TableCell>
+                    <TableCell className="p-2 text-muted-foreground text-sm">
+                      {selectedProduct?.unit || "-"}
+                    </TableCell>
+                    <TableCell className="p-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-8"
+                        onClick={handleAddIngredient}
+                        disabled={!selectedProductId || !ingredientQty}
+                      >
+                        <PlusIcon className="size-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </div>
         <DialogFooter>
@@ -334,30 +358,32 @@ function AddRecipeDialog({ onAdd }: { onAdd: (recipe: DishUI) => void }) {
 export default function ProductsPage() {
   const t = useTranslations()
   const [dishList, setDishList] = React.useState<DishUI[]>([])
+  const [availableProducts, setAvailableProducts] = React.useState<Product[]>([])
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
+  const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
+  const [sortBy, setSortBy] = React.useState<string>("sales")
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    async function fetchRecipes() {
+    async function fetchData() {
       try {
         setLoading(true)
-        const data = await recipesApi.list()
-        setDishList(data.map(mapRecipeToUI))
+        const [recipes, products] = await Promise.all([
+          recipesApi.list(),
+          productsApi.list(),
+        ])
+        setDishList(recipes.map(mapRecipeToUI))
+        setAvailableProducts(products)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load recipes")
+        setError(err instanceof Error ? err.message : "Failed to load data")
       } finally {
         setLoading(false)
       }
     }
-    fetchRecipes()
+    fetchData()
   }, [])
-
-  const loadRecipeDetails = async (id: string): Promise<DishUI> => {
-    const recipe = await recipesApi.get(parseInt(id))
-    return mapFullRecipeToUI(recipe)
-  }
 
   // Calculate KPIs
   const totalDishes = dishList.length
@@ -365,34 +391,24 @@ export default function ProductsPage() {
   const bestSellers = dishList.filter((d) => d.salesTrend > 10).length
   const declining = dishList.filter((d) => d.salesTrend < -15).length
 
-  // KPIs derived from data - no historical comparison available without tracking
   const kpis: KPI[] = [
-    {
-      label: t.products.totalDishes,
-      value: String(totalDishes),
-      description: t.products.activeRecipes,
-    },
-    {
-      label: t.products.avgMargin,
-      value: avgMargin.toFixed(1),
-      trend: avgMargin > 60 ? "up" : avgMargin < 40 ? "down" : "neutral",
-      description: avgMargin > 60 ? t.products.healthy : t.products.needsReview,
-    },
-    {
-      label: t.products.bestSellers,
-      value: String(bestSellers),
-      description: t.products.dishesAbove50,
-    },
-    {
-      label: t.products.declining,
-      value: String(declining),
-      trend: declining > 0 ? "down" : "neutral",
-      description: t.products.dishesDown20,
-    },
+    { label: t.products.totalDishes, value: String(totalDishes) },
+    { label: t.products.avgMargin, value: avgMargin.toFixed(1), trend: avgMargin > 60 ? "up" : avgMargin < 40 ? "down" : "neutral" },
+    { label: t.products.bestSellers, value: String(bestSellers) },
+    { label: t.products.declining, value: String(declining), trend: declining > 0 ? "down" : "neutral" },
   ]
 
-  const handleAddRecipe = (recipe: DishUI) => {
-    setDishList((prev) => [...prev, recipe])
+  const refetchRecipes = async () => {
+    try {
+      const recipes = await recipesApi.list()
+      setDishList(recipes.map(mapRecipeToUI))
+    } catch (err) {
+      console.error("Failed to refetch recipes:", err)
+    }
+  }
+
+  const handleAddRecipe = async () => {
+    await refetchRecipes()
   }
 
   const topMarginDishes = [...dishList]
@@ -401,13 +417,19 @@ export default function ProductsPage() {
     .map((d) => ({
       name: d.name,
       margin: d.margin,
+      category: d.category.toLowerCase(),
+      fill: categoryColors[d.category.toLowerCase()] || "#94a3b8",
     }))
 
   const columns: ColumnDef<DishUI>[] = [
     {
       accessorKey: "name",
       header: t.products.dish,
-      cell: ({ row }) => <RecipeDrawer dish={row.original} onLoadDetails={loadRecipeDetails} />,
+      cell: ({ row }) => (
+        <Link href={`/products/${row.original.id}`} className="font-medium text-foreground hover:underline">
+          {row.original.name}
+        </Link>
+      ),
     },
     {
       accessorKey: "category",
@@ -492,8 +514,23 @@ export default function ProductsPage() {
     },
   ]
 
+  // Apply category filter and custom sorting
+  const filteredAndSortedDishes = React.useMemo(() => {
+    let result = [...dishList]
+    if (categoryFilter !== "all") {
+      result = result.filter((d) => d.category.toLowerCase() === categoryFilter)
+    }
+    switch (sortBy) {
+      case "sales": result.sort((a, b) => b.salesTrend - a.salesTrend); break
+      case "margin": result.sort((a, b) => b.margin - a.margin); break
+      case "price": result.sort((a, b) => b.price - a.price); break
+      case "name": result.sort((a, b) => a.name.localeCompare(b.name)); break
+    }
+    return result
+  }, [dishList, categoryFilter, sortBy])
+
   const table = useReactTable({
-    data: dishList,
+    data: filteredAndSortedDishes,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
@@ -527,7 +564,7 @@ export default function ProductsPage() {
       <PageHeader
         title={t.products.title}
         description={t.products.description}
-        actions={<AddRecipeDialog onAdd={handleAddRecipe} />}
+        actions={<AddRecipeDialog onAdd={handleAddRecipe} availableProducts={availableProducts} />}
       />
 
       <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
@@ -543,21 +580,31 @@ export default function ProductsPage() {
       {topMarginDishes.length > 0 && (
         <div className="px-4 lg:px-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex-row items-center justify-between">
               <CardTitle>{t.products.topMargin}</CardTitle>
-              <CardDescription>{t.products.topMarginDesc}</CardDescription>
+              <div className="flex gap-4">
+                {Object.entries(categoryColors).map(([cat, color]) => (
+                  <div key={cat} className="flex items-center gap-1.5">
+                    <div className="size-3 rounded-sm" style={{ backgroundColor: color }} />
+                    <span className="text-sm text-muted-foreground capitalize">{cat}</span>
+                  </div>
+                ))}
+              </div>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
-                <BarChart data={topMarginDishes} layout="vertical">
-                  <CartesianGrid horizontal={false} />
+              <ChartContainer config={chartConfig} style={{ height: Math.max(200, topMarginDishes.length * 40) }} className="w-full">
+                <BarChart data={topMarginDishes} layout="vertical" barSize={24}>
                   <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                  <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
+                  <YAxis dataKey="name" type="category" width={180} tick={{ fontSize: 13 }} />
                   <ChartTooltip
                     cursor={false}
                     content={<ChartTooltipContent formatter={(v) => `${Number(v).toFixed(1)}%`} />}
                   />
-                  <Bar dataKey="margin" fill="var(--color-margin)" radius={4} />
+                  <Bar dataKey="margin" radius={4}>
+                    {topMarginDishes.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ChartContainer>
             </CardContent>
@@ -567,20 +614,54 @@ export default function ProductsPage() {
 
       <div className="px-4 lg:px-6">
         <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>{t.products.menu}</CardTitle>
-                <CardDescription>{t.products.menuDesc}</CardDescription>
-              </div>
-              <div className="relative w-full sm:w-64">
-                <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                <Input
-                  placeholder={t.products.searchDish}
-                  value={globalFilter}
-                  onChange={(e) => setGlobalFilter(e.target.value)}
-                  className="pl-8"
-                />
+          <CardHeader className="pb-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px]">
+                  <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                  <Input
+                    placeholder={t.products.searchDish}
+                    value={globalFilter}
+                    onChange={(e) => setGlobalFilter(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={categoryFilter === "all" ? "default" : "outline"}
+                    onClick={() => setCategoryFilter("all")}
+                    className="h-9"
+                  >
+                    All
+                  </Button>
+                  {["antipasti", "primi", "secondi", "dolci"].map((cat) => (
+                    <Button
+                      key={cat}
+                      size="sm"
+                      variant={categoryFilter === cat ? "default" : "outline"}
+                      onClick={() => setCategoryFilter(cat)}
+                      className="h-9 gap-1.5"
+                    >
+                      <span
+                        className="size-2.5 rounded-full"
+                        style={{ backgroundColor: categoryColors[cat] }}
+                      />
+                      <span className="capitalize">{cat}</span>
+                    </Button>
+                  ))}
+                </div>
+                <Select value={sortBy} onValueChange={(v) => v && setSortBy(v)}>
+                  <SelectTrigger className="w-[140px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sales">Most sold</SelectItem>
+                    <SelectItem value="margin">Highest margin</SelectItem>
+                    <SelectItem value="price">Highest price</SelectItem>
+                    <SelectItem value="name">A-Z</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>

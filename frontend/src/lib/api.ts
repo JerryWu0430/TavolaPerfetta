@@ -305,27 +305,40 @@ export interface RecipeIngredient {
   product_id: number
   quantity: number
   unit: string | null
+  waste_pct: number
   product_name?: string | null
   product_unit_price?: number | null
+  supplier_name?: string | null
+  cost: number
+}
+
+export interface WeeklySales {
+  week: string
+  quantity: number
 }
 
 export interface Recipe {
   id: number
   name: string
   category: string | null
+  description: string | null
   price: number
   is_active: boolean
   created_at: string
   updated_at: string
   cost: number
   margin: number
+  margin_value: number
   ingredients: RecipeIngredient[]
+  weekly_sales: WeeklySales[]
+  is_best_seller: boolean
 }
 
 export interface RecipeListItem {
   id: number
   name: string
   category: string | null
+  description: string | null
   price: number
   is_active: boolean
   cost: number
@@ -348,7 +361,7 @@ export const recipes = {
     is_active?: boolean
     ingredients?: Array<{ product_id: number; quantity: number; unit?: string }>
   }) => fetchAPI<Recipe>("/recipes", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Recipe> & { ingredients?: Array<{ product_id: number; quantity: number; unit?: string }> }) =>
+  update: (id: number, data: Omit<Partial<Recipe>, 'ingredients'> & { ingredients?: Array<{ product_id: number; quantity: number; unit?: string }> }) =>
     fetchAPI<Recipe>(`/recipes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) =>
     fetchAPI<{ ok: boolean }>(`/recipes/${id}`, { method: "DELETE" }),
