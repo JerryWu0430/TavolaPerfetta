@@ -1,5 +1,5 @@
+from datetime import date as DateType, datetime
 from pydantic import BaseModel
-from datetime import date, datetime
 
 
 class InvoiceLineCreate(BaseModel):
@@ -21,7 +21,7 @@ class InvoiceLineResponse(InvoiceLineCreate):
 class InvoiceBase(BaseModel):
     supplier_id: int | None = None
     invoice_number: str | None = None
-    date: date
+    date: DateType
     total: float = 0.0
     vat: float = 0.0
     status: str = "pending"

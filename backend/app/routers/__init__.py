@@ -6,6 +6,9 @@ from .inventory import router as inventory_router
 from .haccp import router as haccp_router
 from .locations import router as locations_router
 from .ocr import router as ocr_router
+from .price_history import router as price_history_router
+from .recipes import router as recipes_router
+from .orders import router as orders_router
 
 __all__ = [
     "suppliers_router",
@@ -16,4 +19,7 @@ __all__ = [
     "haccp_router",
     "locations_router",
     "ocr_router",
+    "price_history_router",
+    "recipes_router",
+    "orders_router",
 ]

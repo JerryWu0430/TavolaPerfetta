@@ -10,6 +10,9 @@ from .routers import (
     haccp_router,
     locations_router,
     ocr_router,
+    price_history_router,
+    recipes_router,
+    orders_router,
 )
 
 # Create tables
@@ -39,6 +42,9 @@ app.include_router(inventory_router)
 app.include_router(haccp_router)
 app.include_router(locations_router)
 app.include_router(ocr_router)
+app.include_router(price_history_router)
+app.include_router(recipes_router)
+app.include_router(orders_router)
 
 
 @app.get("/")

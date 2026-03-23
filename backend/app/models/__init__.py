@@ -5,6 +5,9 @@ from .delivery import Delivery, DeliveryItem
 from .invoice import Invoice, InvoiceLine
 from .inventory import Inventory
 from .haccp import HACCPChecklist, HACCPItem, HACCPTemplate
+from .price_history import PriceHistory
+from .recipe import Recipe, RecipeIngredient
+from .order import Order, OrderItem
 
 __all__ = [
     "Location",
@@ -18,4 +21,9 @@ __all__ = [
     "HACCPChecklist",
     "HACCPItem",
     "HACCPTemplate",
+    "PriceHistory",
+    "Recipe",
+    "RecipeIngredient",
+    "Order",
+    "OrderItem",
 ]

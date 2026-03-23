@@ -1,5 +1,5 @@
+from datetime import date as DateType, datetime
 from pydantic import BaseModel
-from datetime import date, datetime
 
 
 class DeliveryItemCreate(BaseModel):
@@ -19,7 +19,7 @@ class DeliveryItemResponse(DeliveryItemCreate):
 
 class DeliveryBase(BaseModel):
     supplier_id: int
-    date: date
+    date: DateType
     status: str = "pending"
     notes: str | None = None
 
@@ -29,7 +29,7 @@ class DeliveryCreate(DeliveryBase):
 
 
 class DeliveryUpdate(BaseModel):
-    date: date | None = None
+    date: DateType | None = None
     status: str | None = None
     notes: str | None = None
 

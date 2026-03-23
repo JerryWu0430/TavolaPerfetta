@@ -1,9 +1,11 @@
 """Seed database with sample data"""
 from datetime import date, datetime, timedelta
+import random
 from sqlalchemy.orm import Session
 from ..models import (
     Location, Supplier, Product, Delivery, DeliveryItem,
-    Inventory, HACCPTemplate, HACCPChecklist, HACCPItem
+    Inventory, HACCPTemplate, HACCPChecklist, HACCPItem,
+    Recipe, RecipeIngredient, Order, OrderItem, PriceHistory
 )
 
 
@@ -16,6 +18,9 @@ def seed_all(db: Session):
     seed_haccp_templates(db)
     seed_sample_deliveries(db)
     seed_sample_haccp(db)
+    seed_recipes(db)
+    seed_orders(db)
+    seed_price_history(db)
 
 
 def seed_locations(db: Session):
@@ -238,6 +243,186 @@ def seed_sample_haccp(db: Session):
                 passed=passed
             )
             db.add(item)
+
+    db.commit()
+
+
+def seed_recipes(db: Session):
+    if db.query(Recipe).count() > 0:
+        return
+
+    products = {p.name: p for p in db.query(Product).all()}
+
+    recipes_data = [
+        {
+            "name": "Spaghetti alla Carbonara",
+            "category": "primi",
+            "price": 14.00,
+            "ingredients": [
+                ("Spaghetti De Cecco", 0.12, "kg"),
+                ("Guanciale", 0.05, "kg"),
+                ("Parmigiano Reggiano 24 mesi", 0.03, "kg"),
+            ]
+        },
+        {
+            "name": "Risotto alla Milanese",
+            "category": "primi",
+            "price": 16.00,
+            "ingredients": [
+                ("Burro", 0.03, "kg"),
+                ("Parmigiano Reggiano 24 mesi", 0.04, "kg"),
+                ("Cipolle dorate", 0.03, "kg"),
+            ]
+        },
+        {
+            "name": "Tagliatelle al Ragù",
+            "category": "primi",
+            "price": 15.00,
+            "ingredients": [
+                ("Manzo macinato", 0.1, "kg"),
+                ("Pomodori San Marzano", 0.15, "kg"),
+                ("Cipolle dorate", 0.03, "kg"),
+            ]
+        },
+        {
+            "name": "Spaghetti alle Vongole",
+            "category": "primi",
+            "price": 18.00,
+            "ingredients": [
+                ("Spaghetti De Cecco", 0.12, "kg"),
+                ("Vongole veraci", 0.25, "kg"),
+                ("Aglio", 0.01, "kg"),
+                ("Olio EVO Toscano", 0.02, "l"),
+            ]
+        },
+        {
+            "name": "Gamberi alla Griglia",
+            "category": "secondi",
+            "price": 24.00,
+            "ingredients": [
+                ("Gamberi freschi", 0.2, "kg"),
+                ("Olio EVO Toscano", 0.02, "l"),
+                ("Aglio", 0.005, "kg"),
+            ]
+        },
+        {
+            "name": "Calamari Fritti",
+            "category": "secondi",
+            "price": 18.00,
+            "ingredients": [
+                ("Calamari", 0.2, "kg"),
+                ("Farina 00", 0.05, "kg"),
+            ]
+        },
+        {
+            "name": "Caprese",
+            "category": "antipasti",
+            "price": 12.00,
+            "ingredients": [
+                ("Mozzarella di Bufala", 0.125, "kg"),
+                ("Pomodori San Marzano", 0.15, "kg"),
+                ("Basilico fresco", 0.5, "bunch"),
+                ("Olio EVO Toscano", 0.02, "l"),
+            ]
+        },
+        {
+            "name": "Tiramisù",
+            "category": "dolci",
+            "price": 8.00,
+            "ingredients": [
+                ("Ricotta fresca", 0.08, "kg"),
+                ("Panna fresca", 0.05, "l"),
+            ]
+        },
+    ]
+
+    for data in recipes_data:
+        recipe = Recipe(
+            name=data["name"],
+            category=data["category"],
+            price=data["price"],
+            is_active=True
+        )
+        db.add(recipe)
+        db.flush()
+
+        for ing_name, qty, unit in data["ingredients"]:
+            if ing_name in products:
+                ingredient = RecipeIngredient(
+                    recipe_id=recipe.id,
+                    product_id=products[ing_name].id,
+                    quantity=qty,
+                    unit=unit
+                )
+                db.add(ingredient)
+
+    db.commit()
+
+
+def seed_orders(db: Session):
+    if db.query(Order).count() > 0:
+        return
+
+    recipes = db.query(Recipe).all()
+    location = db.query(Location).first()
+
+    if not recipes:
+        return
+
+    today = date.today()
+    for i in range(30):  # Last 30 days
+        order_date = today - timedelta(days=i)
+        num_orders = random.randint(20, 50)  # Orders per day
+
+        for _ in range(num_orders):
+            order = Order(
+                location_id=location.id if location else None,
+                date=order_date,
+                total=0.0
+            )
+            db.add(order)
+            db.flush()
+
+            num_items = random.randint(1, 4)
+            total = 0.0
+            for _ in range(num_items):
+                recipe = random.choice(recipes)
+                qty = random.randint(1, 3)
+                item = OrderItem(
+                    order_id=order.id,
+                    recipe_id=recipe.id,
+                    quantity=qty,
+                    unit_price=recipe.price
+                )
+                total += qty * recipe.price
+                db.add(item)
+
+            order.total = total
+
+    db.commit()
+
+
+def seed_price_history(db: Session):
+    if db.query(PriceHistory).count() > 0:
+        return
+
+    products = db.query(Product).all()
+    today = datetime.utcnow()
+
+    for product in products:
+        # Record price for last 6 months
+        for month in range(6):
+            recorded_at = today - timedelta(days=month * 30)
+            # Slight variation from current price
+            variation = random.uniform(-0.1, 0.15)  # -10% to +15%
+            price = product.unit_price * (1 - variation * (month / 6))
+
+            record = PriceHistory(
+                product_id=product.id,
+                price=round(price, 2),
+                recorded_at=recorded_at
+            )
+            db.add(record)
 
     db.commit()
 

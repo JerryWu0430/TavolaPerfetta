@@ -1,5 +1,5 @@
+from datetime import date as DateType, datetime
 from pydantic import BaseModel
-from datetime import date, datetime
 
 
 class HACCPTemplateBase(BaseModel):
@@ -44,7 +44,7 @@ class HACCPItemResponse(HACCPItemCreate):
 
 class HACCPChecklistBase(BaseModel):
     location_id: int | None = None
-    date: date
+    date: DateType
     operator: str | None = None
     shift: str | None = None
     notes: str | None = None
