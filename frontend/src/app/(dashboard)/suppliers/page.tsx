@@ -140,10 +140,14 @@ function LogDeliveryDialog({ supplier, onLog }: { supplier: Supplier; onLog: (de
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        <PackageIcon className="size-4 mr-2" />
-        {t.suppliers.logDelivery}
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <PackageIcon className="size-4 mr-2" />
+            {t.suppliers.logDelivery}
+          </Button>
+        }
+      />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t.suppliers.logDelivery}</DialogTitle>
@@ -387,10 +391,14 @@ function AddSupplierDialog({ onAdd }: { onAdd: (supplier: Supplier) => void }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
-        <PlusIcon className="size-4 mr-2" />
-        {t.suppliers.addSupplier}
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button>
+            <PlusIcon className="size-4 mr-2" />
+            {t.suppliers.addSupplier}
+          </Button>
+        }
+      />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t.suppliers.newSupplier}</DialogTitle>

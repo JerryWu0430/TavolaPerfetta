@@ -437,12 +437,14 @@ export function DataTable({
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" />}
-            >
-              <Columns3Icon data-icon="inline-start" />
-              Columns
-              <ChevronDownIcon data-icon="inline-end" />
-            </DropdownMenuTrigger>
+              render={
+                <Button variant="outline" size="sm">
+                  <Columns3Icon data-icon="inline-start" />
+                  Columns
+                  <ChevronDownIcon data-icon="inline-end" />
+                </Button>
+              }
+            />
             <DropdownMenuContent align="end" className="w-32">
               {table
                 .getAllColumns()
