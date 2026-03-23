@@ -365,30 +365,27 @@ export default function ProductsPage() {
   const bestSellers = dishList.filter((d) => d.salesTrend > 10).length
   const declining = dishList.filter((d) => d.salesTrend < -15).length
 
+  // KPIs derived from data - no historical comparison available without tracking
   const kpis: KPI[] = [
     {
       label: t.products.totalDishes,
       value: String(totalDishes),
-      change: 2,
-      trend: "up",
+      description: t.products.activeRecipes,
     },
     {
       label: t.products.avgMargin,
       value: avgMargin.toFixed(1),
-      change: 1.5,
-      trend: "up",
+      trend: avgMargin > 60 ? "up" : avgMargin < 40 ? "down" : "neutral",
+      description: avgMargin > 60 ? t.products.healthy : t.products.needsReview,
     },
     {
       label: t.products.bestSellers,
       value: String(bestSellers),
-      change: 8,
-      trend: "up",
       description: t.products.dishesAbove50,
     },
     {
       label: t.products.declining,
       value: String(declining),
-      change: -2,
       trend: declining > 0 ? "down" : "neutral",
       description: t.products.dishesDown20,
     },

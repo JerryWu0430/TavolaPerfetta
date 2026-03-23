@@ -22,32 +22,39 @@ interface KPICardProps {
 export function KPICard({ kpi, prefix = "", suffix = "" }: KPICardProps) {
   const t = useTranslations()
 
+  // Treat 0% change as neutral regardless of trend prop
+  const effectiveChange = kpi.change ?? 0
+  const isNeutral = effectiveChange === 0
+  const effectiveTrend = isNeutral ? "neutral" : kpi.trend
+
   const TrendIcon =
-    kpi.trend === "up"
+    effectiveTrend === "up"
       ? TrendingUpIcon
-      : kpi.trend === "down"
+      : effectiveTrend === "down"
         ? TrendingDownIcon
         : MinusIcon
 
   const trendColor =
-    kpi.trend === "up"
+    effectiveTrend === "up"
       ? "text-green-600 dark:text-green-400"
-      : kpi.trend === "down"
+      : effectiveTrend === "down"
         ? "text-red-600 dark:text-red-400"
         : "text-muted-foreground"
 
   const badgeColor =
-    kpi.trend === "up"
+    effectiveTrend === "up"
       ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400"
-      : kpi.trend === "down"
+      : effectiveTrend === "down"
         ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400"
         : ""
 
-  const trendText = kpi.trend === "up"
+  const trendText = effectiveTrend === "up"
     ? t.home.trending.up
-    : kpi.trend === "down"
+    : effectiveTrend === "down"
       ? t.home.trending.down
       : t.home.trending.neutral
+
+  const hasChangeData = kpi.change !== undefined && kpi.trend !== undefined
 
   return (
     <Card className="@container/card">
@@ -58,20 +65,24 @@ export function KPICard({ kpi, prefix = "", suffix = "" }: KPICardProps) {
           {kpi.value}
           {suffix}
         </CardTitle>
-        <CardAction>
-          <Badge variant="outline" className={badgeColor}>
-            <TrendIcon className="size-3" />
-            {kpi.change >= 0 ? "+" : ""}
-            {kpi.change}%
-          </Badge>
-        </CardAction>
+        {hasChangeData && (
+          <CardAction>
+            <Badge variant="outline" className={badgeColor}>
+              <TrendIcon className="size-3" />
+              {effectiveChange >= 0 ? "+" : ""}
+              {effectiveChange}%
+            </Badge>
+          </CardAction>
+        )}
       </CardHeader>
       {kpi.description && (
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className={`line-clamp-1 flex gap-2 font-medium ${trendColor}`}>
-            {trendText}
-            <TrendIcon className="size-4" />
-          </div>
+          {hasChangeData && (
+            <div className={`line-clamp-1 flex gap-2 font-medium ${trendColor}`}>
+              {trendText}
+              <TrendIcon className="size-4" />
+            </div>
+          )}
           <div className="text-muted-foreground">{kpi.description}</div>
         </CardFooter>
       )}

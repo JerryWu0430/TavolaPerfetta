@@ -2,8 +2,8 @@
 export interface KPI {
   label: string
   value: string
-  change: number
-  trend: "up" | "down" | "neutral"
+  change?: number
+  trend?: "up" | "down" | "neutral"
   description?: string
 }
 

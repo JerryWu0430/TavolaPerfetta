@@ -480,12 +480,45 @@ export default function SuppliersPage() {
     async function fetchData() {
       try {
         setLoading(true)
-        const [suppliersRes, deliveriesRes] = await Promise.all([
+        const [suppliersRes, deliveriesRes, priceHistoryRes] = await Promise.all([
           suppliersApi.list(),
           deliveriesApi.list(),
+          priceHistoryApi.list(),
         ])
 
-        const mappedSuppliers = suppliersRes.items.map(mapSupplierToUI)
+        // Calculate overall price changes from price history (no supplier link available)
+        const pricesByProduct: Record<number, { prices: { date: string; price: number }[] }> = {}
+
+        for (const record of priceHistoryRes) {
+          if (!pricesByProduct[record.product_id]) {
+            pricesByProduct[record.product_id] = { prices: [] }
+          }
+          pricesByProduct[record.product_id].prices.push({
+            date: record.recorded_at,
+            price: record.price,
+          })
+        }
+
+        // Calculate avg price change across all products
+        let totalChange = 0
+        let productCount = 0
+        for (const data of Object.values(pricesByProduct)) {
+          const sorted = data.prices.sort((a, b) => a.date.localeCompare(b.date))
+          if (sorted.length >= 2) {
+            const oldPrice = sorted[0].price
+            const newPrice = sorted[sorted.length - 1].price
+            const change = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 0
+            totalChange += change
+            productCount++
+          }
+        }
+        const avgPriceChange = productCount > 0 ? totalChange / productCount : 0
+
+        // Distribute price change evenly (no per-supplier data available)
+        const mappedSuppliers = suppliersRes.items.map((s) => ({
+          ...mapSupplierToUI(s),
+          priceChange: parseFloat(avgPriceChange.toFixed(1)),
+        }))
         setSuppliers(mappedSuppliers)
 
         // Group deliveries by supplier
@@ -518,33 +551,30 @@ export default function SuppliersPage() {
     ? Math.max(...suppliers.map((s) => s.priceChange))
     : 0
 
+  // KPIs derived from actual data
   const kpis: KPI[] = [
     {
       label: t.suppliers.activeSuppliers,
       value: String(activeSuppliers),
-      change: 1,
-      trend: "up",
+      description: t.suppliers.total,
     },
     {
       label: t.suppliers.openAnomalies,
       value: String(openAnomalies),
-      change: openAnomalies > 0 ? -openAnomalies : 0,
       trend: openAnomalies > 0 ? "down" : "neutral",
       description: t.suppliers.lateOrPartial,
     },
     {
       label: t.suppliers.avgReliability,
       value: avgReliability.toFixed(1),
-      change: 2.5,
-      trend: "up",
+      trend: avgReliability >= 90 ? "up" : avgReliability >= 70 ? "neutral" : "down",
       description: t.suppliers.acrossSuppliers,
     },
     {
       label: t.suppliers.maxPriceIncrease,
       value: maxPriceIncrease.toFixed(1),
-      change: maxPriceIncrease,
       trend: maxPriceIncrease > 5 ? "down" : "neutral",
-      description: t.suppliers.fromLastMonth,
+      description: t.suppliers.fromPriceHistory,
     },
   ]
 

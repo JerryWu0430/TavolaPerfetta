@@ -36,6 +36,7 @@ import {
   orders as ordersApi,
   inventory as inventoryApi,
   priceHistory as priceHistoryApi,
+  recipes as recipesApi,
 } from "@/lib/api"
 import { formatEUR } from "@/types"
 import { TrendingUpIcon, TrendingDownIcon, EuroIcon, UsersIcon, PercentIcon, TrashIcon, Loader2Icon } from "lucide-react"
@@ -80,12 +81,15 @@ export default function ReportsPage() {
   const [costTrendData, setCostTrendData] = React.useState<{ date: string; foodCost: number; laborCost: number; overhead: number }[]>([])
   const [wasteData, setWasteData] = React.useState<WasteData[]>([])
   const [underusedIngredients, setUnderusedIngredients] = React.useState<UnderusedItem[]>([])
-  const [priceInflationData, setPriceInflationData] = React.useState<Record<string, number>[]>([])
+  const [priceInflationData, setPriceInflationData] = React.useState<Array<{ date: string; [key: string]: string | number }>>([])
   const [reportSummary, setReportSummary] = React.useState({
     ytdRevenue: 0,
     totalCovers: 0,
-    avgFoodCost: 30,
-    wastePercentage: 2.8,
+    avgFoodCost: 0,
+    wastePercentage: 0,
+    revenueChange: 0,
+    coversChange: 0,
+    foodCostChange: 0,
   })
 
   React.useEffect(() => {
@@ -93,17 +97,21 @@ export default function ReportsPage() {
       try {
         setLoading(true)
 
-        // Get orders for the last 12 months
-        const startDate = new Date()
+        // Get orders for the last 12 months + last year for comparison
+        const now = new Date()
+        const startDate = new Date(now)
         startDate.setFullYear(startDate.getFullYear() - 1)
+        const lastYearStart = new Date(startDate)
+        lastYearStart.setFullYear(lastYearStart.getFullYear() - 1)
 
-        const [ordersRes, inventoryRes, priceHistoryRes] = await Promise.all([
+        const [ordersRes, inventoryRes, priceHistoryRes, recipesRes] = await Promise.all([
           ordersApi.list({
-            start_date: startDate.toISOString().split("T")[0],
-            end_date: new Date().toISOString().split("T")[0],
+            start_date: lastYearStart.toISOString().split("T")[0],
+            end_date: now.toISOString().split("T")[0],
           }),
           inventoryApi.list(),
           priceHistoryApi.list(),
+          recipesApi.list(),
         ])
 
         // Aggregate orders by month
@@ -127,35 +135,83 @@ export default function ReportsPage() {
           }))
         setMonthlyRevenueData(revenueData)
 
-        // Cost trend data (estimated)
-        const costData = revenueData.map((d) => ({
-          date: d.date,
-          foodCost: 28 + Math.random() * 4,
-          laborCost: 26 + Math.random() * 4,
-          overhead: 10 + Math.random() * 3,
-        }))
+        // Calculate avg food cost from recipes (cost vs price) - needed for cost trend
+        const recipesWithCost = recipesRes.filter((r) => r.cost > 0 && r.price > 0)
+        const avgFoodCost = recipesWithCost.length > 0
+          ? (recipesWithCost.reduce((sum, r) => sum + (r.cost / r.price) * 100, 0) / recipesWithCost.length)
+          : 30 // Default estimate if no recipe data
+
+        // Cost trend from actual recipe costs
+        const baseFoodCostPct = avgFoodCost
+        const costData = revenueData.map((d) => {
+          // Use actual food cost with slight variance based on revenue fluctuations
+          const revenueVariance = revenueData.length > 1
+            ? (d.revenue - revenueData[0].revenue) / (revenueData[0].revenue || 1)
+            : 0
+          return {
+            date: d.date,
+            foodCost: baseFoodCostPct + revenueVariance * 2,
+            laborCost: 26, // Fixed estimate - would need staffing data
+            overhead: 12, // Fixed estimate - would need expense data
+          }
+        })
         setCostTrendData(costData)
 
-        // Calculate YTD summary
-        const currentYear = new Date().getFullYear()
+        // Calculate YTD summary with YoY comparison
+        const currentYear = now.getFullYear()
+        const lastYear = currentYear - 1
         const ytdOrders = ordersRes.filter((o) => o.date.startsWith(String(currentYear)))
+        const lastYearOrders = ordersRes.filter((o) => o.date.startsWith(String(lastYear)))
+
         const ytdRevenue = ytdOrders.reduce((sum, o) => sum + o.total, 0)
+        const lastYearRevenue = lastYearOrders.reduce((sum, o) => sum + o.total, 0)
+        const revenueChange = lastYearRevenue > 0
+          ? ((ytdRevenue - lastYearRevenue) / lastYearRevenue) * 100
+          : 0
+
+        const ytdCovers = ytdOrders.length
+        const lastYearCovers = lastYearOrders.length
+        const coversChange = lastYearCovers > 0
+          ? ((ytdCovers - lastYearCovers) / lastYearCovers) * 100
+          : 0
+
+        // Estimate waste from inventory excess (items well over min_stock)
+        const totalInventoryValue = inventoryRes.reduce((sum, item) => sum + item.quantity * 10, 0) // estimate €10/unit
+        const excessValue = inventoryRes
+          .filter((item) => item.quantity > item.min_stock * 2)
+          .reduce((sum, item) => sum + (item.quantity - item.min_stock * 2) * 10, 0)
+        const wastePercentage = totalInventoryValue > 0
+          ? (excessValue / totalInventoryValue) * 100
+          : 0
+
         setReportSummary({
           ytdRevenue,
-          totalCovers: ytdOrders.length,
-          avgFoodCost: 29.5,
-          wastePercentage: 2.8,
+          totalCovers: ytdCovers,
+          avgFoodCost: parseFloat(avgFoodCost.toFixed(1)),
+          wastePercentage: parseFloat(wastePercentage.toFixed(1)),
+          revenueChange: parseFloat(revenueChange.toFixed(1)),
+          coversChange: parseFloat(coversChange.toFixed(1)),
+          foodCostChange: 0, // No historical recipe cost data available
         })
 
-        // Waste data (static for now - would need waste tracking API)
-        setWasteData([
-          { category: "Verdure", amount: 45, cost: 180, percentage: 32.1 },
-          { category: "Latticini", amount: 28, cost: 224, percentage: 20.0 },
-          { category: "Carni", amount: 18, cost: 396, percentage: 12.9 },
-          { category: "Pane/Pasta", amount: 22, cost: 44, percentage: 15.7 },
-          { category: "Pesce", amount: 12, cost: 216, percentage: 8.6 },
-          { category: "Altro", amount: 15, cost: 60, percentage: 10.7 },
-        ])
+        // Estimate waste from excess inventory items
+        const excessItems = inventoryRes
+          .filter((item) => item.quantity > item.min_stock * 2)
+          .map((item) => ({
+            category: item.product_name,
+            amount: Math.round(item.quantity - item.min_stock * 2),
+            cost: Math.round((item.quantity - item.min_stock * 2) * 10),
+            percentage: 0,
+          }))
+          .sort((a, b) => b.cost - a.cost)
+          .slice(0, 6)
+
+        const totalWasteCost = excessItems.reduce((sum, item) => sum + item.cost, 0)
+        const wasteWithPercentage = excessItems.map((item) => ({
+          ...item,
+          percentage: totalWasteCost > 0 ? (item.cost / totalWasteCost) * 100 : 0,
+        }))
+        setWasteData(wasteWithPercentage)
 
         // Underused ingredients from inventory (items with low usage)
         const underused = inventoryRes
@@ -267,9 +323,9 @@ export default function ReportsPage() {
             <CardTitle className="text-2xl">{formatEUR(reportSummary.ytdRevenue)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUpIcon className="size-4" />
-              <span>+8.2% {t.reports.vsLastYear}</span>
+            <div className={`flex items-center gap-1 text-sm ${reportSummary.revenueChange > 0 ? "text-green-600" : reportSummary.revenueChange < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+              {reportSummary.revenueChange > 0 ? <TrendingUpIcon className="size-4" /> : reportSummary.revenueChange < 0 ? <TrendingDownIcon className="size-4" /> : null}
+              <span>{reportSummary.revenueChange >= 0 ? "+" : ""}{reportSummary.revenueChange}% {t.reports.vsLastYear}</span>
             </div>
           </CardContent>
         </Card>
@@ -282,9 +338,9 @@ export default function ReportsPage() {
             <CardTitle className="text-2xl">{reportSummary.totalCovers.toLocaleString(locale === "it" ? "it-IT" : "en-US")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingUpIcon className="size-4" />
-              <span>+5.4% {t.reports.vsLastYear}</span>
+            <div className={`flex items-center gap-1 text-sm ${reportSummary.coversChange > 0 ? "text-green-600" : reportSummary.coversChange < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+              {reportSummary.coversChange > 0 ? <TrendingUpIcon className="size-4" /> : reportSummary.coversChange < 0 ? <TrendingDownIcon className="size-4" /> : null}
+              <span>{reportSummary.coversChange >= 0 ? "+" : ""}{reportSummary.coversChange}% {t.reports.vsLastYear}</span>
             </div>
           </CardContent>
         </Card>
@@ -297,9 +353,8 @@ export default function ReportsPage() {
             <CardTitle className="text-2xl">{reportSummary.avgFoodCost}%</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-1 text-sm text-green-600">
-              <TrendingDownIcon className="size-4" />
-              <span>-1.5% {t.reports.vsTarget}</span>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span>{t.reports.fromRecipes}</span>
             </div>
           </CardContent>
         </Card>
@@ -312,9 +367,8 @@ export default function ReportsPage() {
             <CardTitle className="text-2xl">{reportSummary.wastePercentage}%</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-1 text-sm text-amber-600">
-              <TrendingUpIcon className="size-4" />
-              <span>+0.3% {t.reports.vsLastMonth}</span>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span>{t.reports.excessInventory}</span>
             </div>
           </CardContent>
         </Card>

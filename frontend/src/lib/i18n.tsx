@@ -149,6 +149,9 @@ const translations = {
       declining: "Declining",
       dishesAbove50: "dishes >50 sold/week",
       dishesDown20: "dishes down >20%",
+      activeRecipes: "active recipes",
+      healthy: "healthy margin",
+      needsReview: "needs review",
       // Add recipe dialog
       addRecipe: "Add Recipe",
       newRecipe: "New Recipe",
@@ -206,6 +209,8 @@ const translations = {
       lateOrPartial: "late or partial deliveries",
       acrossSuppliers: "across all suppliers",
       fromLastMonth: "from last month",
+      total: "total suppliers",
+      fromPriceHistory: "from price history",
     },
     // Inventory page
     inventory: {
@@ -310,6 +315,8 @@ const translations = {
       value: "Value",
       totalAtRisk: "Total value at risk",
       profit: "Profit",
+      fromRecipes: "calculated from recipes",
+      excessInventory: "excess inventory estimate",
     },
     // Common
     common: {
@@ -471,6 +478,9 @@ const translations = {
       declining: "In Calo",
       dishesAbove50: "piatti >50 venduti/sett.",
       dishesDown20: "piatti in calo >20%",
+      activeRecipes: "ricette attive",
+      healthy: "margine sano",
+      needsReview: "da rivedere",
       // Add recipe dialog
       addRecipe: "Aggiungi Ricetta",
       newRecipe: "Nuova Ricetta",
@@ -528,6 +538,8 @@ const translations = {
       lateOrPartial: "consegne in ritardo o parziali",
       acrossSuppliers: "tra tutti i fornitori",
       fromLastMonth: "dal mese scorso",
+      total: "fornitori totali",
+      fromPriceHistory: "da storico prezzi",
     },
     // Inventory page
     inventory: {
@@ -632,6 +644,8 @@ const translations = {
       value: "Valore",
       totalAtRisk: "Valore totale a rischio",
       profit: "Profitto",
+      fromRecipes: "calcolato da ricette",
+      excessInventory: "stima eccesso inventario",
     },
     // Common
     common: {

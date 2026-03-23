@@ -47,7 +47,7 @@ export default function HomePage() {
     date: string
     completedChecks: number
     totalChecks: number
-    status: "complete" | "partial" | "incomplete"
+    status: "pass" | "fail" | "partial"
     issues: string[]
   } | null>(null)
   const [alerts, setAlerts] = React.useState<Alert[]>([])
@@ -61,11 +61,19 @@ export default function HomePage() {
         setLoading(true)
 
         // Fetch all data in parallel
-        const [locationsRes, ordersRes, inventoryRes, haccpTodayRes] = await Promise.all([
+        // Fetch last 30 days + same day last week for comparison
+        const today = new Date()
+        const lastWeekSameDay = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+        const [locationsRes, ordersRes, lastWeekOrdersRes, inventoryRes, haccpTodayRes] = await Promise.all([
           locationsApi.list(),
           ordersApi.list({
             start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            end_date: new Date().toISOString().split("T")[0],
+            end_date: today.toISOString().split("T")[0],
+          }),
+          ordersApi.list({
+            start_date: lastWeekSameDay.toISOString().split("T")[0],
+            end_date: lastWeekSameDay.toISOString().split("T")[0],
           }),
           inventoryApi.list(),
           haccp.checklists.today().catch(() => null),
@@ -117,41 +125,78 @@ export default function HomePage() {
         })
         setLocationComparisons(comparisons)
 
-        // Calculate KPIs
-        const today = new Date().toISOString().split("T")[0]
-        const todayOrders = ordersRes.filter((o) => o.date === today)
+        // Calculate KPIs with real comparisons
+        const todayStr = today.toISOString().split("T")[0]
+        const lastWeekStr = lastWeekSameDay.toISOString().split("T")[0]
+
+        // Today's data
+        const todayOrders = ordersRes.filter((o) => o.date === todayStr)
         const todayRevenue = todayOrders.reduce((sum, o) => sum + o.total, 0)
         const todayCovers = todayOrders.length
+
+        // Last week same day data
+        const lastWeekRevenue = lastWeekOrdersRes.reduce((sum, o) => sum + o.total, 0)
+        const lastWeekCovers = lastWeekOrdersRes.length
+
+        // Calculate change percentages
+        const revenueChange = lastWeekRevenue > 0
+          ? ((todayRevenue - lastWeekRevenue) / lastWeekRevenue) * 100
+          : 0
+        const coversChange = lastWeekCovers > 0
+          ? ((todayCovers - lastWeekCovers) / lastWeekCovers) * 100
+          : 0
+
+        // Calculate avg ticket
         const totalRevenue = ordersRes.reduce((sum, o) => sum + o.total, 0)
         const avgTicket = ordersRes.length > 0 ? totalRevenue / ordersRes.length : 0
+        const lastWeekAvgTicket = lastWeekCovers > 0 ? lastWeekRevenue / lastWeekCovers : 0
+        const avgTicketChange = lastWeekAvgTicket > 0
+          ? ((avgTicket - lastWeekAvgTicket) / lastWeekAvgTicket) * 100
+          : 0
+
+        // Estimate food cost from costs data (revenue * 0.3 is estimated cost)
+        const totalCosts = ordersRes.reduce((sum, o) => sum + o.total * 0.3, 0)
+        const foodCostPercentage = totalRevenue > 0 ? (totalCosts / totalRevenue) * 100 : 0
+        const lastWeekCosts = lastWeekOrdersRes.reduce((sum, o) => sum + o.total * 0.3, 0)
+        const lastWeekFoodCost = lastWeekRevenue > 0 ? (lastWeekCosts / lastWeekRevenue) * 100 : 0
+        const foodCostChange = lastWeekFoodCost > 0
+          ? ((foodCostPercentage - lastWeekFoodCost) / lastWeekFoodCost) * 100
+          : 0
+
+        // Helper to determine trend (0 = neutral)
+        const getTrend = (change: number, invertGood = false): "up" | "down" | "neutral" => {
+          if (change === 0) return "neutral"
+          if (invertGood) return change < 0 ? "up" : "down" // For food cost, lower is better
+          return change > 0 ? "up" : "down"
+        }
 
         setKpis([
           {
             label: t.home.revenueToday,
             value: todayRevenue.toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
-            change: 12.5,
-            trend: "up" as const,
+            change: parseFloat(revenueChange.toFixed(1)),
+            trend: getTrend(parseFloat(revenueChange.toFixed(1))),
             description: t.home.vsSameDay,
           },
           {
             label: t.home.covers,
             value: String(todayCovers),
-            change: 8.2,
-            trend: "up" as const,
+            change: parseFloat(coversChange.toFixed(1)),
+            trend: getTrend(parseFloat(coversChange.toFixed(1))),
             description: t.home.reservationsWalkin,
           },
           {
             label: t.home.foodCost,
-            value: "28.5",
-            change: -2.1,
-            trend: "down" as const,
+            value: foodCostPercentage.toFixed(1),
+            change: parseFloat(foodCostChange.toFixed(1)),
+            trend: getTrend(parseFloat(foodCostChange.toFixed(1)), true), // Lower food cost is better
             description: t.home.target,
           },
           {
             label: t.home.avgTicket,
             value: avgTicket.toFixed(2),
-            change: 4.3,
-            trend: "up" as const,
+            change: parseFloat(avgTicketChange.toFixed(1)),
+            trend: getTrend(parseFloat(avgTicketChange.toFixed(1))),
             description: t.home.inclDrinks,
           },
         ])
@@ -163,7 +208,7 @@ export default function HomePage() {
             date: haccpTodayRes.date,
             completedChecks: haccpTodayRes.items.length,
             totalChecks: haccpTodayRes.items.length, // Would need templates count
-            status: haccpTodayRes.status === "passed" ? "complete" : haccpTodayRes.status === "failed" ? "incomplete" : "partial",
+            status: haccpTodayRes.status === "passed" ? "pass" : haccpTodayRes.status === "failed" ? "fail" : "partial",
             issues: failedItems.map((i) => i.name),
           })
         } else {
@@ -171,7 +216,7 @@ export default function HomePage() {
             date: new Date().toISOString().split("T")[0],
             completedChecks: 0,
             totalChecks: 0,
-            status: "incomplete",
+            status: "partial",
             issues: [],
           })
         }
