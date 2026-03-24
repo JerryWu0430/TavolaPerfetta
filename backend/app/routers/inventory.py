@@ -16,7 +16,10 @@ def list_inventory(
     low_stock: bool = False,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Inventory).join(Product).options(joinedload(Inventory.product))
+    # Eager load product AND supplier in single query (fixes N+1)
+    query = db.query(Inventory).join(Product).options(
+        joinedload(Inventory.product).joinedload(Product.supplier)
+    )
     if location_id:
         query = query.filter(Inventory.location_id == location_id)
 
@@ -27,12 +30,8 @@ def list_inventory(
         if inv.theoretical_quantity > 0:
             variance = ((inv.quantity - inv.theoretical_quantity) / inv.theoretical_quantity) * 100
 
-        # Get supplier name if product has supplier
-        supplier_name = None
-        if inv.product.supplier_id:
-            supplier = db.query(Supplier).filter(Supplier.id == inv.product.supplier_id).first()
-            if supplier:
-                supplier_name = supplier.name
+        # Supplier already loaded via joinedload
+        supplier_name = inv.product.supplier.name if inv.product.supplier else None
 
         item = InventoryWithProduct(
             id=inv.id,

@@ -8,6 +8,9 @@ from ..schemas import OCRResult
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
 
 @router.post("/invoice", response_model=OCRResult)
 async def process_invoice(file: UploadFile = File(...)):
@@ -17,17 +20,36 @@ async def process_invoice(file: UploadFile = File(...)):
     if not settings.gemini_api_key:
         raise HTTPException(status_code=500, detail="Gemini API key not configured")
 
-    # Read and encode file
+    # Validate file type
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {content_type}. Allowed: {', '.join(ALLOWED_TYPES)}"
+        )
+
+    # Read and validate size
     content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024*1024)}MB"
+        )
+
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+
     base64_image = base64.b64encode(content).decode("utf-8")
 
-    # Determine mime type
-    mime_type = file.content_type or "image/jpeg"
+    # Determine mime type from extension as fallback
+    mime_type = content_type
     if file.filename:
-        if file.filename.endswith(".png"):
+        if file.filename.lower().endswith(".png"):
             mime_type = "image/png"
-        elif file.filename.endswith(".pdf"):
+        elif file.filename.lower().endswith(".pdf"):
             mime_type = "application/pdf"
+        elif file.filename.lower().endswith(".webp"):
+            mime_type = "image/webp"
 
     # Configure Gemini
     genai.configure(api_key=settings.gemini_api_key)

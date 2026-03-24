@@ -23,10 +23,11 @@ class DeliveryItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"))
     product_name = Column(String(100))  # fallback if product not in system
     quantity = Column(Float, nullable=False)
     unit = Column(String(20))
     unit_price = Column(Float, default=0.0)
 
     delivery = relationship("Delivery", back_populates="items")
+    product = relationship("Product", backref="delivery_items")
