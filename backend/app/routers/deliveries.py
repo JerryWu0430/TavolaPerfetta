@@ -1,10 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Delivery, DeliveryItem
+from ..models import Delivery, DeliveryItem, Inventory, Supplier
 from ..schemas import DeliveryCreate, DeliveryUpdate, DeliveryResponse
 
 router = APIRouter(prefix="/deliveries", tags=["deliveries"])
+
+RECEIVED_STATUSES = {"on_time", "late", "partial"}
+
+
+def update_inventory_from_delivery(db: Session, delivery: Delivery):
+    """Add delivered quantities to inventory."""
+    for item in delivery.items:
+        if not item.product_id:
+            continue
+        inv = db.query(Inventory).filter(Inventory.product_id == item.product_id).first()
+        if inv:
+            inv.quantity += item.quantity
+        else:
+            db.add(Inventory(product_id=item.product_id, quantity=item.quantity))
+
+
+def update_supplier_reliability(db: Session, supplier_id: int):
+    """Recalculate supplier reliability from recent deliveries."""
+    from datetime import datetime, timedelta
+    ninety_days_ago = datetime.now() - timedelta(days=90)
+
+    deliveries = db.query(Delivery).filter(
+        Delivery.supplier_id == supplier_id,
+        Delivery.date >= ninety_days_ago.date(),
+        Delivery.status.in_(RECEIVED_STATUSES)
+    ).all()
+
+    if not deliveries:
+        return
+
+    on_time = sum(1 for d in deliveries if d.status == "on_time")
+    score = (on_time / len(deliveries)) * 100
+
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if supplier:
+        supplier.reliability_score = round(score, 1)
 
 
 @router.get("", response_model=list[DeliveryResponse])
@@ -43,6 +79,13 @@ def create_delivery(data: DeliveryCreate, db: Session = Depends(get_db)):
         item = DeliveryItem(**item_data.model_dump(), delivery_id=delivery.id)
         db.add(item)
 
+    db.flush()
+
+    # If created with received status, update inventory
+    if delivery.status in RECEIVED_STATUSES:
+        update_inventory_from_delivery(db, delivery)
+        update_supplier_reliability(db, delivery.supplier_id)
+
     db.commit()
     db.refresh(delivery)
     return delivery
@@ -53,8 +96,19 @@ def update_delivery(delivery_id: int, data: DeliveryUpdate, db: Session = Depend
     delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
+
+    old_status = delivery.status
+    update_data = data.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
         setattr(delivery, key, value)
+
+    # If status changed from pending to received, update inventory
+    new_status = update_data.get("status")
+    if new_status and old_status == "pending" and new_status in RECEIVED_STATUSES:
+        update_inventory_from_delivery(db, delivery)
+        update_supplier_reliability(db, delivery.supplier_id)
+
     db.commit()
     db.refresh(delivery)
     return delivery
