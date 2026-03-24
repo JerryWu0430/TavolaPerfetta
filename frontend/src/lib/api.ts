@@ -227,6 +227,9 @@ export interface InventoryItem {
   updated_at: string
   product_name: string
   product_unit: string | null
+  product_category: string | null
+  product_unit_price: number
+  supplier_name: string | null
   min_stock: number
   variance_pct: number | null
 }

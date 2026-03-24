@@ -26,5 +26,8 @@ class InventoryResponse(InventoryBase):
 class InventoryWithProduct(InventoryResponse):
     product_name: str
     product_unit: str | None
+    product_category: str | None = None
+    product_unit_price: float = 0.0
+    supplier_name: str | None = None
     min_stock: float
     variance_pct: float | None = None

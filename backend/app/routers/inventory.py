@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from ..database import get_db
-from ..models import Inventory, Product
+from ..models import Inventory, Product, Supplier
 from ..schemas import InventoryUpdate, InventoryResponse
 from ..schemas.inventory import InventoryWithProduct
 
@@ -16,7 +16,7 @@ def list_inventory(
     low_stock: bool = False,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Inventory).join(Product)
+    query = db.query(Inventory).join(Product).options(joinedload(Inventory.product))
     if location_id:
         query = query.filter(Inventory.location_id == location_id)
 
@@ -26,6 +26,13 @@ def list_inventory(
         variance = None
         if inv.theoretical_quantity > 0:
             variance = ((inv.quantity - inv.theoretical_quantity) / inv.theoretical_quantity) * 100
+
+        # Get supplier name if product has supplier
+        supplier_name = None
+        if inv.product.supplier_id:
+            supplier = db.query(Supplier).filter(Supplier.id == inv.product.supplier_id).first()
+            if supplier:
+                supplier_name = supplier.name
 
         item = InventoryWithProduct(
             id=inv.id,
@@ -37,6 +44,9 @@ def list_inventory(
             updated_at=inv.updated_at,
             product_name=inv.product.name,
             product_unit=inv.product.unit,
+            product_category=inv.product.category,
+            product_unit_price=inv.product.unit_price or 0.0,
+            supplier_name=supplier_name,
             min_stock=inv.product.min_stock,
             variance_pct=variance,
         )
