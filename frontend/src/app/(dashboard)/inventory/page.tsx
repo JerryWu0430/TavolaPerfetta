@@ -43,6 +43,8 @@ import {
 import { useTranslations } from "@/lib/i18n"
 import { inventory, products, type InventoryItem as APIInventoryItem } from "@/lib/api"
 import { formatEUR } from "@/types"
+import type { KPI } from "@/types"
+import { KPICard } from "@/components/kpi-card"
 import {
   Drawer,
   DrawerClose,
@@ -742,31 +744,11 @@ export default function InventoryPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground uppercase tracking-wide">Total Products</p>
-            <p className="text-3xl font-bold mt-1">{totalProducts}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground uppercase tracking-wide">Below Threshold</p>
-            <p className="text-3xl font-bold mt-1 text-orange-500">{belowThreshold}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground uppercase tracking-wide">Needs Attention</p>
-            <p className="text-3xl font-bold mt-1 text-red-500">{needsAttention}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground uppercase tracking-wide">Est. Total Value</p>
-            <p className="text-3xl font-bold mt-1">{formatEUR(totalValue)}</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+        <KPICard kpi={{ label: "Total Products", value: String(totalProducts) }} />
+        <KPICard kpi={{ label: "Below Threshold", value: String(belowThreshold), trend: belowThreshold > 0 ? "down" : "neutral" }} />
+        <KPICard kpi={{ label: "Needs Attention", value: String(needsAttention), trend: needsAttention > 0 ? "down" : "neutral" }} />
+        <KPICard kpi={{ label: "Total Value", value: formatEUR(totalValue) }} />
       </div>
 
       {/* Charts */}

@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -213,16 +213,14 @@ function SupplierCard({ supplier, onRefresh }: { supplier: SupplierListItem; onR
             supplierName={supplier.name}
             onSuccess={onRefresh}
           />
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            render={<Link href={`/bolla?supplier=${encodeURIComponent(supplier.name)}`} />}
+          <Link
+            href={`/bolla?supplier=${encodeURIComponent(supplier.name)}`}
             onClick={(e) => e.stopPropagation()}
+            className={buttonVariants({ variant: "outline", size: "sm", className: "w-full" })}
           >
             <FileTextIcon className="size-4 mr-1" />
             Add Note
-          </Button>
+          </Link>
         </div>
       </CardContent>
     </Card>
@@ -384,29 +382,10 @@ export default function SuppliersPage() {
     : 0
 
   const kpis: KPI[] = [
-    {
-      label: t.suppliers.activeSuppliers,
-      value: String(activeSuppliers),
-      description: t.suppliers.total,
-    },
-    {
-      label: t.suppliers.openAnomalies,
-      value: String(openAnomalies),
-      trend: openAnomalies > 0 ? "down" : "neutral",
-      description: t.suppliers.lateOrPartial,
-    },
-    {
-      label: t.suppliers.avgReliability,
-      value: avgReliability.toFixed(1),
-      trend: avgReliability >= 90 ? "up" : avgReliability >= 70 ? "neutral" : "down",
-      description: t.suppliers.acrossSuppliers,
-    },
-    {
-      label: t.suppliers.maxPriceIncrease,
-      value: maxPriceIncrease.toFixed(1),
-      trend: maxPriceIncrease > 5 ? "down" : "neutral",
-      description: t.suppliers.fromPriceHistory,
-    },
+    { label: "Total Suppliers", value: String(activeSuppliers) },
+    { label: "Avg Reliability", value: avgReliability.toFixed(1), trend: avgReliability >= 90 ? "up" : avgReliability >= 70 ? "neutral" : "down" },
+    { label: "Open Anomalies", value: String(openAnomalies), trend: openAnomalies > 0 ? "down" : "neutral" },
+    { label: "Max Price Δ", value: maxPriceIncrease.toFixed(1), trend: maxPriceIncrease > 5 ? "down" : "neutral" },
   ]
 
   if (loading) {

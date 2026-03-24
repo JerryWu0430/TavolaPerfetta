@@ -9,8 +9,10 @@ import {
 } from "@tanstack/react-table"
 
 import { PageHeader } from "@/components/page-header"
+import { KPICard } from "@/components/kpi-card"
 import { HACCPStatusBadge } from "@/components/status-badge"
 import { Progress } from "@/components/ui/progress"
+import type { KPI } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -683,12 +685,10 @@ function ManageTemplatesDrawer({
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger
-                        render={
-                          <Button variant="ghost" size="icon" className="shrink-0 ml-2">
-                            <MoreVerticalIcon className="size-4" />
-                          </Button>
-                        }
-                      />
+                        className="shrink-0 ml-2 inline-flex items-center justify-center rounded-md p-2 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <MoreVerticalIcon className="size-4" />
+                      </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem onClick={() => handleEdit(template)}>
                           <PencilIcon className="size-4 mr-2" />
@@ -971,43 +971,11 @@ export default function HACCPPage() {
         description={t.haccp.description}
       />
 
-      <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t.haccp.compliance7}</CardDescription>
-            <CardTitle className="text-3xl">{complianceStats.last7Days.toFixed(1)}%</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Progress value={complianceStats.last7Days} className="h-2" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t.haccp.compliance30}</CardDescription>
-            <CardTitle className="text-3xl">{complianceStats.last30Days.toFixed(1)}%</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Progress value={complianceStats.last30Days} className="h-2" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t.haccp.passed}</CardDescription>
-            <CardTitle className="text-3xl text-green-600">{complianceStats.passedChecks}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{t.haccp.of} {complianceStats.totalChecks} {t.haccp.total}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t.haccp.failed}</CardDescription>
-            <CardTitle className="text-3xl text-red-600">{complianceStats.failedChecks}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{t.haccp.toVerify}</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+        <KPICard kpi={{ label: t.haccp.compliance7, value: complianceStats.last7Days.toFixed(1) }} suffix="%" />
+        <KPICard kpi={{ label: t.haccp.compliance30, value: complianceStats.last30Days.toFixed(1) }} suffix="%" />
+        <KPICard kpi={{ label: t.haccp.passed, value: String(complianceStats.passedChecks), trend: "up" }} />
+        <KPICard kpi={{ label: t.haccp.failed, value: String(complianceStats.failedChecks), trend: complianceStats.failedChecks > 0 ? "down" : "neutral" }} />
       </div>
 
       <div className="grid gap-4 px-4 lg:px-6 @3xl/main:grid-cols-2">
