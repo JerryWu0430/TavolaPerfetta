@@ -94,17 +94,19 @@ interface KPIGridProps {
   kpis: KPI[]
   prefix?: string
   suffix?: string
+  /** If true, don't auto-add € or % based on position */
+  simple?: boolean
 }
 
-export function KPIGrid({ kpis, prefix, suffix }: KPIGridProps) {
+export function KPIGrid({ kpis, prefix, suffix, simple }: KPIGridProps) {
   return (
     <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
       {kpis.map((kpi, idx) => (
         <KPICard
           key={idx}
           kpi={kpi}
-          prefix={idx === 0 ? "€" : prefix}
-          suffix={idx === 2 ? "%" : suffix}
+          prefix={simple ? prefix : (idx === 0 ? "€" : prefix)}
+          suffix={simple ? suffix : (idx === 2 ? "%" : suffix)}
         />
       ))}
     </div>
