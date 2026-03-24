@@ -18,8 +18,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useTranslations, useI18n } from "@/lib/i18n"
-import { ocr, invoices, type OCRResult } from "@/lib/api"
+import { ocr, invoices, suppliers as suppliersApi, products as productsApi, type Supplier, type Product } from "@/lib/api"
 import type { InvoiceLine, AnomalyType } from "@/types"
 import { formatEUR } from "@/types"
 import {
@@ -37,24 +45,20 @@ import {
   HelpCircleIcon,
 } from "lucide-react"
 
-// Mock data for anomaly detection
-const mockInventoryPrices: Record<string, number> = {
-  "Olio Extra Vergine": 8.50,
-  "Pomodori San Marzano": 2.80,
-  "Mozzarella di Bufala": 12.00,
-  "Farina 00": 1.20,
-  "Basilico Fresco": 3.50,
-}
-
 type Step = 1 | 2 | 3
+
+interface ExtractedLine extends InvoiceLine {
+  productId?: number
+  matchedProduct?: Product
+}
 
 interface ExtractedData {
   supplierName: string
-  supplierVAT?: string
+  supplierId?: number
   invoiceNumber: string
   invoiceDate: string
   dueDate?: string
-  lines: InvoiceLine[]
+  lines: ExtractedLine[]
   subtotal: number
   vat: number
   total: number
@@ -183,16 +187,20 @@ function UploadStep({
 function ReviewStep({
   data,
   onDataChange,
+  suppliers,
+  products,
 }: {
   data: ExtractedData
   onDataChange: (data: ExtractedData) => void
+  suppliers: Supplier[]
+  products: Product[]
 }) {
   const t = useTranslations()
   const { locale } = useI18n()
 
   const handleLineChange = (
     lineId: string,
-    field: keyof InvoiceLine,
+    field: keyof ExtractedLine,
     value: string | number
   ) => {
     const newLines = data.lines.map((line) =>
@@ -201,6 +209,16 @@ function ReviewStep({
     // Recalculate totals
     const subtotal = newLines.reduce((sum, line) => sum + (line.total || 0), 0)
     onDataChange({ ...data, lines: newLines, subtotal, total: subtotal + data.vat })
+  }
+
+  const handleProductMatch = (lineId: string, productId: number | undefined) => {
+    const product = products.find((p) => p.id === productId)
+    const newLines = data.lines.map((line) =>
+      line.id === lineId
+        ? { ...line, productId, matchedProduct: product }
+        : line
+    )
+    onDataChange({ ...data, lines: newLines })
   }
 
   return (
@@ -214,15 +232,35 @@ function ReviewStep({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Header info */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label>{t.bolla.supplier}</Label>
-            <Input
-              value={data.supplierName}
-              onChange={(e) =>
-                onDataChange({ ...data, supplierName: e.target.value })
-              }
-            />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="space-y-2 md:col-span-2 lg:col-span-1">
+            <Label>{t.bolla.supplier} *</Label>
+            <Select
+              value={data.supplierId ? String(data.supplierId) : ""}
+              onValueChange={(v) => {
+                if (!v) return
+                const supplier = suppliers.find((s) => s.id === parseInt(v))
+                onDataChange({
+                  ...data,
+                  supplierId: parseInt(v),
+                  supplierName: supplier?.name || data.supplierName,
+                })
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={data.supplierName || "Select supplier"} />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!data.supplierId && data.supplierName && (
+              <p className="text-xs text-amber-600">OCR detected: {data.supplierName}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>{t.bolla.invoiceNumber}</Label>
@@ -234,13 +272,14 @@ function ReviewStep({
             />
           </div>
           <div className="space-y-2">
-            <Label>{t.bolla.invoiceDate}</Label>
+            <Label>{t.bolla.invoiceDate} *</Label>
             <Input
               type="date"
               value={data.invoiceDate}
               onChange={(e) =>
                 onDataChange({ ...data, invoiceDate: e.target.value })
               }
+              required
             />
           </div>
           <div className="space-y-2">
@@ -262,11 +301,12 @@ function ReviewStep({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">{t.bolla.itemDesc}</TableHead>
+                  <TableHead className="min-w-[180px]">{t.bolla.itemDesc}</TableHead>
+                  <TableHead className="min-w-[160px]">{t.bolla.matchedTo}</TableHead>
                   <TableHead className="w-20">{t.bolla.quantity}</TableHead>
                   <TableHead className="w-20">{t.bolla.unit}</TableHead>
-                  <TableHead className="w-28">{t.bolla.unitPrice}</TableHead>
-                  <TableHead className="w-28">{t.bolla.total}</TableHead>
+                  <TableHead className="w-24">{t.bolla.unitPrice}</TableHead>
+                  <TableHead className="w-24">{t.bolla.total}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -278,8 +318,26 @@ function ReviewStep({
                         onChange={(e) =>
                           handleLineChange(line.id, "description", e.target.value)
                         }
-                        className="min-w-[180px]"
+                        className="min-w-[160px]"
                       />
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={line.productId ? String(line.productId) : ""}
+                        onValueChange={(v) => handleProductMatch(line.id, v ? parseInt(v) : undefined)}
+                      >
+                        <SelectTrigger className="w-full min-w-[140px]">
+                          <SelectValue placeholder="Match product..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">No match</SelectItem>
+                          {products.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       <Input
@@ -377,14 +435,21 @@ function AnomalyIcon({ type }: { type: AnomalyType }) {
 function ConfirmStep({
   data,
   anomalies,
+  reviewed,
+  onReviewedChange,
+  suppliers,
 }: {
   data: ExtractedData
-  anomalies: InvoiceLine[]
+  anomalies: ExtractedLine[]
+  reviewed: boolean
+  onReviewedChange: (reviewed: boolean) => void
+  suppliers: Supplier[]
 }) {
   const t = useTranslations()
   const { locale } = useI18n()
 
   const hasAnomalies = anomalies.length > 0
+  const supplier = suppliers.find((s) => s.id === data.supplierId)
 
   return (
     <div className="space-y-6">
@@ -401,11 +466,14 @@ function ConfirmStep({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
               <p className="text-sm text-muted-foreground">{t.bolla.supplier}</p>
-              <p className="font-medium">{data.supplierName}</p>
+              <p className="font-medium">{supplier?.name || data.supplierName}</p>
+              {!data.supplierId && (
+                <p className="text-xs text-amber-600">No supplier linked!</p>
+              )}
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t.bolla.invoiceNumber}</p>
-              <p className="font-medium">{data.invoiceNumber}</p>
+              <p className="font-medium">{data.invoiceNumber || "-"}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t.bolla.invoiceDate}</p>
@@ -533,6 +601,30 @@ function ConfirmStep({
           </CardContent>
         </Card>
       )}
+
+      {/* Review Confirmation */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="reviewed"
+              checked={reviewed}
+              onCheckedChange={(checked) => onReviewedChange(!!checked)}
+            />
+            <div className="grid gap-1.5 leading-none">
+              <label
+                htmlFor="reviewed"
+                className="text-sm font-medium leading-none cursor-pointer"
+              >
+                {t.bolla.confirmReview}
+              </label>
+              <p className="text-sm text-muted-foreground">
+                {t.bolla.confirmReviewDesc}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -543,55 +635,74 @@ export default function BollaPage() {
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [extractedData, setExtractedData] = React.useState<ExtractedData | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([])
+  const [products, setProducts] = React.useState<Product[]>([])
+  const [reviewed, setReviewed] = React.useState(false)
+
+  // Load suppliers and products on mount
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const [suppliersRes, productsRes] = await Promise.all([
+          suppliersApi.list(),
+          productsApi.list(),
+        ])
+        setSuppliers(suppliersRes.items || [])
+        setProducts(productsRes || [])
+      } catch (err) {
+        console.error("Failed to load suppliers/products:", err)
+      }
+    }
+    loadData()
+  }, [])
+
+  // Auto-match supplier from OCR result
+  const autoMatchSupplier = (name: string): number | undefined => {
+    if (!name) return undefined
+    const lower = name.toLowerCase()
+    const match = suppliers.find((s) =>
+      s.name.toLowerCase().includes(lower) || lower.includes(s.name.toLowerCase())
+    )
+    return match?.id
+  }
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true)
     setError(null)
+    setReviewed(false)
 
     try {
       const result = await ocr.processInvoice(file)
 
-      // Convert OCR result to ExtractedData format with anomaly detection
-      const linesWithAnomalies: InvoiceLine[] = result.lines.map((line, idx) => {
-        const expectedPrice = mockInventoryPrices[line.description]
-        const invoiceLine: InvoiceLine = {
+      // Convert OCR result to ExtractedData format
+      const lines: ExtractedLine[] = result.lines.map((line, idx) => {
+        // Try to auto-match product
+        const matchedProduct = products.find((p) =>
+          p.name.toLowerCase().includes(line.description.toLowerCase()) ||
+          line.description.toLowerCase().includes(p.name.toLowerCase())
+        )
+
+        return {
           id: `line-${idx}`,
           description: line.description,
           quantity: line.quantity,
           unit: line.unit || "pcs",
           unitPrice: line.unit_price,
           total: line.total,
+          productId: matchedProduct?.id,
+          matchedProduct,
         }
-
-        if (expectedPrice && line.unit_price > expectedPrice * 1.1) {
-          return {
-            ...invoiceLine,
-            anomaly: {
-              type: "price_increase" as AnomalyType,
-              message: t.bolla.priceIncrease,
-              expectedValue: expectedPrice,
-              severity: "warning" as const,
-            },
-          }
-        }
-        if (!expectedPrice) {
-          return {
-            ...invoiceLine,
-            anomaly: {
-              type: "new_item" as AnomalyType,
-              message: t.bolla.newItem,
-              severity: "warning" as const,
-            },
-          }
-        }
-        return invoiceLine
       })
+
+      // Auto-match supplier
+      const supplierId = autoMatchSupplier(result.supplier_name || "")
 
       setExtractedData({
         supplierName: result.supplier_name || "",
+        supplierId,
         invoiceNumber: result.invoice_number || "",
         invoiceDate: result.date || new Date().toISOString().split("T")[0],
-        lines: linesWithAnomalies,
+        lines,
         subtotal: result.subtotal,
         vat: result.vat,
         total: result.total,
@@ -605,16 +716,18 @@ export default function BollaPage() {
   }
 
   const handleSave = async () => {
-    if (!extractedData) return
+    if (!extractedData || !reviewed) return
 
     try {
       await invoices.create({
+        supplier_id: extractedData.supplierId,
         invoice_number: extractedData.invoiceNumber,
         date: extractedData.invoiceDate,
         total: extractedData.total,
         vat: extractedData.vat,
         status: "pending",
         lines: extractedData.lines.map((line) => ({
+          product_id: line.productId,
           description: line.description,
           quantity: line.quantity,
           unit: line.unit,
@@ -625,12 +738,17 @@ export default function BollaPage() {
       alert(t.bolla.success)
       setStep(1)
       setExtractedData(null)
+      setReviewed(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save invoice")
     }
   }
 
-  const anomalies = extractedData?.lines.filter((l) => l.anomaly) || []
+  // Lines without product match are flagged
+  const unmatchedLines = extractedData?.lines.filter((l) => !l.productId) || []
+
+  // Check if data is valid for proceeding
+  const canProceedToConfirm = extractedData && extractedData.supplierId && extractedData.invoiceDate
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -655,11 +773,22 @@ export default function BollaPage() {
         )}
 
         {step === 2 && extractedData && (
-          <ReviewStep data={extractedData} onDataChange={setExtractedData} />
+          <ReviewStep
+            data={extractedData}
+            onDataChange={setExtractedData}
+            suppliers={suppliers}
+            products={products}
+          />
         )}
 
         {step === 3 && extractedData && (
-          <ConfirmStep data={extractedData} anomalies={anomalies} />
+          <ConfirmStep
+            data={extractedData}
+            anomalies={unmatchedLines}
+            reviewed={reviewed}
+            onReviewedChange={setReviewed}
+            suppliers={suppliers}
+          />
         )}
 
         {/* Navigation buttons */}
@@ -672,6 +801,7 @@ export default function BollaPage() {
                   // Cancel
                 } else {
                   setStep((s) => (s - 1) as Step)
+                  if (step === 3) setReviewed(false)
                 }
               }}
               disabled={step === 1}
@@ -683,13 +813,13 @@ export default function BollaPage() {
             {step < 3 ? (
               <Button
                 onClick={() => setStep((s) => (s + 1) as Step)}
-                disabled={step === 1 || !extractedData}
+                disabled={step === 1 || !extractedData || (step === 2 && !canProceedToConfirm)}
               >
                 {t.bolla.next}
                 <ArrowRightIcon className="size-4 ml-2" />
               </Button>
             ) : (
-              <Button onClick={handleSave}>
+              <Button onClick={handleSave} disabled={!reviewed}>
                 <CheckIcon className="size-4 mr-2" />
                 {t.bolla.saveInvoice}
               </Button>

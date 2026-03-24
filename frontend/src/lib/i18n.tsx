@@ -64,9 +64,11 @@ const translations = {
       cancel: "Cancel",
       success: "Invoice saved successfully",
       error: "Error processing invoice",
-      matchedTo: "Matched to",
+      matchedTo: "Match Product",
       confidence: "Confidence",
       noMatch: "No match found",
+      confirmReview: "I have reviewed all data and confirm it is correct",
+      confirmReviewDesc: "You must review supplier, line items, and totals before saving",
     },
     // Home page
     home: {
@@ -469,6 +471,8 @@ const translations = {
       matchedTo: "Abbinato a",
       confidence: "Confidenza",
       noMatch: "Nessuna corrispondenza",
+      confirmReview: "Ho verificato tutti i dati e confermo che sono corretti",
+      confirmReviewDesc: "Devi verificare fornitore, righe e totali prima di salvare",
     },
     // Home page
     home: {
