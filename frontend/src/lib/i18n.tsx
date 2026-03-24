@@ -120,6 +120,24 @@ const translations = {
         title: "Location Comparison",
         description: "Monthly performance by location",
       },
+      // Secondary KPIs
+      lowStock: "Low Stock Items",
+      itemsBelowMin: "Items below minimum",
+      supplierAnomalies: "Supplier Issues",
+      openAnomalies: "Open anomalies",
+      avgMargin: "Avg Margin",
+      acrossRecipes: "Across active recipes",
+      pendingDeliveries: "Pending Deliveries",
+      onTrack: "On track",
+      // Operational cards
+      topDishes: "Top Margin Dishes",
+      topDishesDesc: "Best performing recipes by margin",
+      supplierIssuesTitle: "Supplier Alerts",
+      supplierIssuesDesc: "Suppliers needing attention",
+      recentDeliveries: "Recent Deliveries",
+      recentDeliveriesDesc: "Latest delivery status",
+      priceChanges: "Price Changes",
+      priceChangesDesc: "Significant price movements (30d)",
     },
     // Products page
     products: {
@@ -525,6 +543,24 @@ const translations = {
         title: "Confronto Sedi",
         description: "Performance mensile per sede",
       },
+      // Secondary KPIs
+      lowStock: "Articoli Sotto Scorta",
+      itemsBelowMin: "Articoli sotto il minimo",
+      supplierAnomalies: "Problemi Fornitori",
+      openAnomalies: "Anomalie aperte",
+      avgMargin: "Margine Medio",
+      acrossRecipes: "Su ricette attive",
+      pendingDeliveries: "Consegne in Attesa",
+      onTrack: "In orario",
+      // Operational cards
+      topDishes: "Piatti Top Margine",
+      topDishesDesc: "Ricette migliori per margine",
+      supplierIssuesTitle: "Avvisi Fornitori",
+      supplierIssuesDesc: "Fornitori che richiedono attenzione",
+      recentDeliveries: "Consegne Recenti",
+      recentDeliveriesDesc: "Stato ultime consegne",
+      priceChanges: "Variazioni Prezzi",
+      priceChangesDesc: "Variazioni significative (30gg)",
     },
     // Products page
     products: {
