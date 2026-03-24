@@ -362,16 +362,14 @@ export default function SuppliersPage() {
     )
   }, [suppliers, search])
 
-  // Price trends chart data (top 6 by price change)
+  // Price trends chart data (all suppliers sorted by price change desc)
   const priceTrendsData = React.useMemo(() => {
     return [...suppliers]
-      .filter((s) => s.price_change_pct !== 0)
-      .sort((a, b) => Math.abs(b.price_change_pct) - Math.abs(a.price_change_pct))
-      .slice(0, 6)
+      .sort((a, b) => b.price_change_pct - a.price_change_pct)
       .map((s) => ({
         name: s.name.length > 15 ? s.name.slice(0, 15) + "..." : s.name,
         priceChange: s.price_change_pct,
-        fill: s.price_change_pct > 0 ? "#f97316" : "#22c55e",
+        fill: "#f97316",
       }))
   }, [suppliers])
 
@@ -447,10 +445,10 @@ export default function SuppliersPage() {
       </div>
 
       {/* Price Trends Chart */}
-      {priceTrendsData.length > 0 && (
+      {suppliers.length > 0 && (
         <div className="px-4 lg:px-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2">
                 <TrendingUpIcon className="size-5 text-orange-500" />
                 Price Trends
@@ -458,7 +456,7 @@ export default function SuppliersPage() {
               <CardDescription>Price change % by supplier (last 3 months)</CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[200px] w-full">
+              <ChartContainer config={chartConfig} className="w-full" style={{ height: `${Math.max(150, priceTrendsData.length * 40)}px` }}>
                 <BarChart data={priceTrendsData} layout="vertical" margin={{ left: 0, right: 40 }}>
                   <XAxis type="number" tickFormatter={(v) => `${v}%`} />
                   <YAxis type="category" dataKey="name" width={120} tickLine={false} axisLine={false} />
