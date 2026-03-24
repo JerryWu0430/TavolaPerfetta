@@ -3,10 +3,33 @@ from sqlalchemy.orm import Session, joinedload
 from datetime import date
 from ..database import get_db
 from ..models.order import Order, OrderItem
-from ..models.recipe import Recipe
+from ..models.recipe import Recipe, RecipeIngredient
+from ..models.inventory import Inventory
 from ..schemas.order import OrderCreate, OrderResponse, OrderItemResponse
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+
+def deduct_inventory_for_order(db: Session, order_items: list):
+    """Deduct inventory based on recipe ingredients for each order item."""
+    for item in order_items:
+        recipe = db.query(Recipe).options(
+            joinedload(Recipe.ingredients)
+        ).filter(Recipe.id == item.recipe_id).first()
+
+        if not recipe:
+            continue
+
+        for ing in recipe.ingredients:
+            waste_mult = 1 + (ing.waste_pct or 0) / 100
+            qty_to_deduct = ing.quantity * item.quantity * waste_mult
+
+            inv = db.query(Inventory).filter(
+                Inventory.product_id == ing.product_id
+            ).first()
+
+            if inv:
+                inv.quantity = max(0, inv.quantity - qty_to_deduct)
 
 
 @router.get("", response_model=list[OrderResponse])
@@ -96,6 +119,7 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
     db.flush()
 
     # Add items
+    order_items = []
     for item_data in data.items:
         item = OrderItem(
             order_id=order.id,
@@ -104,6 +128,10 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
             unit_price=item_data.unit_price,
         )
         db.add(item)
+        order_items.append(item)
+
+    # Deduct inventory based on recipe ingredients
+    deduct_inventory_for_order(db, order_items)
 
     db.commit()
     db.refresh(order)
