@@ -30,37 +30,55 @@ def get_supplier_stats(supplier_id: int, db: Session) -> dict:
     # Get product IDs for this supplier
     product_ids = [p.id for p in db.query(Product.id).filter(Product.supplier_id == supplier_id).all()]
 
-    # Price change % (last 3 months)
+    # Price change % (last 3 months) - batch query approach
     price_change_pct = 0.0
     if product_ids:
         three_months_ago = datetime.now() - timedelta(days=90)
 
-        # Get price history for these products
-        old_prices = {}
-        new_prices = {}
+        # Get oldest price in last 3 months for each product (single query)
+        from sqlalchemy import and_
+        old_subq = db.query(
+            PriceHistory.product_id,
+            func.min(PriceHistory.recorded_at).label("min_date")
+        ).filter(
+            PriceHistory.product_id.in_(product_ids),
+            PriceHistory.recorded_at >= three_months_ago
+        ).group_by(PriceHistory.product_id).subquery()
 
-        for pid in product_ids:
-            # Get oldest price in last 3 months
-            old_record = db.query(PriceHistory).filter(
-                PriceHistory.product_id == pid,
-                PriceHistory.recorded_at >= three_months_ago
-            ).order_by(PriceHistory.recorded_at.asc()).first()
-
-            # Get newest price
-            new_record = db.query(PriceHistory).filter(
-                PriceHistory.product_id == pid
-            ).order_by(PriceHistory.recorded_at.desc()).first()
-
-            if old_record and new_record and old_record.price > 0:
-                old_prices[pid] = old_record.price
-                new_prices[pid] = new_record.price
-
-        if old_prices:
-            total_change = sum(
-                ((new_prices[pid] - old_prices[pid]) / old_prices[pid]) * 100
-                for pid in old_prices
+        old_prices_query = db.query(PriceHistory).join(
+            old_subq,
+            and_(
+                PriceHistory.product_id == old_subq.c.product_id,
+                PriceHistory.recorded_at == old_subq.c.min_date
             )
-            price_change_pct = round(total_change / len(old_prices), 1)
+        ).all()
+        old_prices = {p.product_id: p.price for p in old_prices_query if p.price > 0}
+
+        # Get newest price for each product (single query)
+        new_subq = db.query(
+            PriceHistory.product_id,
+            func.max(PriceHistory.recorded_at).label("max_date")
+        ).filter(
+            PriceHistory.product_id.in_(product_ids)
+        ).group_by(PriceHistory.product_id).subquery()
+
+        new_prices_query = db.query(PriceHistory).join(
+            new_subq,
+            and_(
+                PriceHistory.product_id == new_subq.c.product_id,
+                PriceHistory.recorded_at == new_subq.c.max_date
+            )
+        ).all()
+        new_prices = {p.product_id: p.price for p in new_prices_query}
+
+        # Calculate average price change
+        changes = []
+        for pid in old_prices:
+            if pid in new_prices and old_prices[pid] > 0:
+                change = ((new_prices[pid] - old_prices[pid]) / old_prices[pid]) * 100
+                changes.append(change)
+        if changes:
+            price_change_pct = round(sum(changes) / len(changes), 1)
 
     # Last delivery date
     last_delivery = db.query(Delivery).filter(
@@ -122,21 +140,31 @@ def list_suppliers(
 
 @router.get("/{supplier_id}", response_model=SupplierDetail)
 def get_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    from sqlalchemy.orm import joinedload
+
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
     stats = get_supplier_stats(supplier_id, db)
 
-    # Get price trends for top products (by price history records)
+    # Get price trends for top products - batch load price history
     products = db.query(Product).filter(Product.supplier_id == supplier_id).limit(5).all()
+    product_ids = [p.id for p in products]
+
+    # Single query for all price history
+    all_history = db.query(PriceHistory).filter(
+        PriceHistory.product_id.in_(product_ids)
+    ).order_by(PriceHistory.product_id, PriceHistory.recorded_at.asc()).all()
+
+    # Group by product_id
+    history_by_product = {}
+    for h in all_history:
+        history_by_product.setdefault(h.product_id, []).append(h)
+
     price_trends = []
-
     for product in products:
-        history = db.query(PriceHistory).filter(
-            PriceHistory.product_id == product.id
-        ).order_by(PriceHistory.recorded_at.asc()).all()
-
+        history = history_by_product.get(product.id, [])
         if history:
             price_trends.append(ProductPriceTrend(
                 product_id=product.id,
@@ -150,14 +178,16 @@ def get_supplier(supplier_id: int, db: Session = Depends(get_db)):
                 ]
             ))
 
-    # Get recent deliveries
-    deliveries = db.query(Delivery).filter(
+    # Get recent deliveries with items eager loaded
+    deliveries = db.query(Delivery).options(
+        joinedload(Delivery.items)
+    ).filter(
         Delivery.supplier_id == supplier_id
     ).order_by(Delivery.date.desc()).limit(10).all()
 
     recent_deliveries = []
     for d in deliveries:
-        # Calculate total from items
+        # Items already loaded
         total = sum(item.quantity * item.unit_price for item in d.items) if d.items else 0
         recent_deliveries.append(DeliveryInfo(
             id=d.id,
