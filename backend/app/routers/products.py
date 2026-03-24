@@ -2,9 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Product
+from ..models.price_history import PriceHistory
 from ..schemas import ProductCreate, ProductUpdate, ProductResponse
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+
+def record_price(db: Session, product_id: int, price: float):
+    """Record price in history if price > 0."""
+    if price and price > 0:
+        db.add(PriceHistory(product_id=product_id, price=price))
 
 
 @router.get("", response_model=list[ProductResponse])
@@ -35,6 +42,9 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 def create_product(data: ProductCreate, db: Session = Depends(get_db)):
     product = Product(**data.model_dump())
     db.add(product)
+    db.flush()
+    # Record initial price
+    record_price(db, product.id, product.unit_price)
     db.commit()
     db.refresh(product)
     return product
@@ -45,8 +55,18 @@ def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(g
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
+
+    update_data = data.model_dump(exclude_unset=True)
+    old_price = product.unit_price
+
+    for key, value in update_data.items():
         setattr(product, key, value)
+
+    # Record price change if unit_price changed
+    new_price = update_data.get("unit_price")
+    if new_price is not None and new_price != old_price:
+        record_price(db, product_id, new_price)
+
     db.commit()
     db.refresh(product)
     return product
