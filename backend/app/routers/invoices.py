@@ -34,14 +34,23 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=InvoiceResponse)
 def create_invoice(data: InvoiceCreate, db: Session = Depends(get_db)):
     lines_data = data.lines
-    invoice_data = data.model_dump(exclude={"lines"})
+    invoice_data = data.model_dump(exclude={"lines", "total"})
     invoice = Invoice(**invoice_data)
     db.add(invoice)
     db.flush()
 
+    lines_total = 0.0
     for line_data in lines_data:
-        line = InvoiceLine(**line_data.model_dump(), invoice_id=invoice.id)
+        line_dict = line_data.model_dump()
+        # Auto-calc line total if not provided
+        if not line_dict.get("total"):
+            line_dict["total"] = line_dict["quantity"] * line_dict.get("unit_price", 0)
+        lines_total += line_dict["total"]
+        line = InvoiceLine(**line_dict, invoice_id=invoice.id)
         db.add(line)
+
+    # Auto-calc invoice total from lines
+    invoice.total = lines_total
 
     db.commit()
     db.refresh(invoice)

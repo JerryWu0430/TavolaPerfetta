@@ -18,13 +18,13 @@ from ..schemas.recipe import (
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 
-def calculate_cost(ingredients: list, db: Session) -> float:
-    """Calculate total cost from ingredients."""
+def calculate_cost_from_loaded(ingredients: list) -> float:
+    """Calculate total cost from pre-loaded ingredients (with product relationship)."""
     total = 0.0
     for ing in ingredients:
-        product = db.query(Product).filter(Product.id == ing.product_id).first()
-        if product:
-            total += ing.quantity * product.unit_price
+        if ing.product:
+            waste_mult = 1 + (ing.waste_pct or 0) / 100
+            total += ing.quantity * ing.product.unit_price * waste_mult
     return total
 
 
@@ -43,7 +43,9 @@ def list_recipes(
     is_active: bool | None = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Recipe).options(joinedload(Recipe.ingredients))
+    query = db.query(Recipe).options(
+        joinedload(Recipe.ingredients).joinedload(RecipeIngredient.product)
+    )
     if category:
         query = query.filter(Recipe.category == category)
     if is_active is not None:
@@ -56,7 +58,7 @@ def list_recipes(
 
     result = []
     for recipe in recipes:
-        cost = calculate_cost(recipe.ingredients, db)
+        cost = calculate_cost_from_loaded(recipe.ingredients)
         margin = calculate_margin(recipe.price, cost)
 
         # Get sales count
@@ -111,27 +113,25 @@ def is_best_seller(recipe_id: int, db: Session) -> bool:
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
 def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
-    from ..models.supplier import Supplier
-
     recipe = db.query(Recipe).options(
-        joinedload(Recipe.ingredients).joinedload(RecipeIngredient.product)
+        joinedload(Recipe.ingredients)
+        .joinedload(RecipeIngredient.product)
+        .joinedload(Product.supplier)
     ).filter(Recipe.id == recipe_id).first()
 
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    cost = calculate_cost(recipe.ingredients, db)
+    cost = calculate_cost_from_loaded(recipe.ingredients)
     margin = calculate_margin(recipe.price, cost)
     margin_value = recipe.price - cost
 
-    # Build ingredient responses with product and supplier info
+    # Build ingredient responses with product and supplier info (all pre-loaded)
     ingredients = []
     for ing in recipe.ingredients:
-        ing_cost = ing.quantity * (ing.product.unit_price if ing.product else 0)
-        supplier_name = None
-        if ing.product and ing.product.supplier_id:
-            supplier = db.query(Supplier).filter(Supplier.id == ing.product.supplier_id).first()
-            supplier_name = supplier.name if supplier else None
+        waste_mult = 1 + (ing.waste_pct or 0) / 100
+        ing_cost = ing.quantity * (ing.product.unit_price if ing.product else 0) * waste_mult
+        supplier_name = ing.product.supplier.name if ing.product and ing.product.supplier else None
         ingredients.append(RecipeIngredientResponse(
             id=ing.id,
             product_id=ing.product_id,
