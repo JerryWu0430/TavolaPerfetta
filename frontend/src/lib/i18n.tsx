@@ -235,6 +235,7 @@ const translations = {
       low: "low",
       normal: "Normal",
       excess: "Excess",
+      belowThreshold: "Below Threshold",
       // Add item
       addItem: "Add Item",
       addItemDesc: "Add a new raw ingredient to inventory",
@@ -639,6 +640,7 @@ const translations = {
       low: "bassi",
       normal: "Normale",
       excess: "Eccesso",
+      belowThreshold: "Sotto Soglia",
       // Add item
       addItem: "Aggiungi Articolo",
       addItemDesc: "Aggiungi un nuovo ingrediente all'inventario",

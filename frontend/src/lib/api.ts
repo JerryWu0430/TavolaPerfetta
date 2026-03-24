@@ -186,7 +186,7 @@ export interface InvoiceLineCreate {
   quantity: number
   unit?: string
   unit_price: number
-  total: number
+  total?: number  // auto-calculated if not provided
 }
 
 export interface InvoiceCreate {
@@ -385,6 +385,13 @@ export interface RecipeListItem {
   sales_per_week: number
 }
 
+export interface RecipeIngredientInput {
+  product_id: number
+  quantity: number
+  unit?: string
+  waste_pct?: number
+}
+
 export const recipes = {
   list: (params?: { category?: string; is_active?: boolean }) => {
     const query = new URLSearchParams()
@@ -396,12 +403,19 @@ export const recipes = {
   create: (data: {
     name: string
     category?: string
+    description?: string
     price?: number
     is_active?: boolean
-    ingredients?: Array<{ product_id: number; quantity: number; unit?: string }>
+    ingredients?: RecipeIngredientInput[]
   }) => fetchAPI<Recipe>("/recipes", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Omit<Partial<Recipe>, 'ingredients'> & { ingredients?: Array<{ product_id: number; quantity: number; unit?: string }> }) =>
-    fetchAPI<Recipe>(`/recipes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  update: (id: number, data: {
+    name?: string
+    category?: string
+    description?: string
+    price?: number
+    is_active?: boolean
+    ingredients?: RecipeIngredientInput[]
+  }) => fetchAPI<Recipe>(`/recipes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) =>
     fetchAPI<{ ok: boolean }>(`/recipes/${id}`, { method: "DELETE" }),
 }
