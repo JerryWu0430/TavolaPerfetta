@@ -39,6 +39,44 @@ class SupplierResponse(SupplierBase):
         from_attributes = True
 
 
+class SupplierListItem(SupplierResponse):
+    """Extended supplier info for list view."""
+    product_count: int = 0
+    price_change_pct: float = 0.0
+    last_delivery_date: str | None = None
+    open_anomalies: int = 0
+
+
 class SupplierList(BaseModel):
-    items: list[SupplierResponse]
+    items: list[SupplierListItem]
     total: int
+
+
+class PricePoint(BaseModel):
+    date: str
+    price: float
+
+
+class ProductPriceTrend(BaseModel):
+    product_id: int
+    product_name: str
+    unit: str | None
+    prices: list[PricePoint]
+
+
+class DeliveryInfo(BaseModel):
+    id: int
+    date: str
+    total: float
+    status: str
+    notes: str | None = None
+
+
+class SupplierDetail(SupplierResponse):
+    """Full supplier detail with computed fields."""
+    product_count: int = 0
+    price_change_pct: float = 0.0
+    last_delivery_date: str | None = None
+    open_anomalies: int = 0
+    price_trends: list[ProductPriceTrend] = []
+    recent_deliveries: list[DeliveryInfo] = []

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Line, LineChart, CartesianGrid, XAxis, YAxis, Legend } from "recharts"
+import { Bar, BarChart, XAxis, YAxis, Cell } from "recharts"
 import Link from "next/link"
 
 import { PageHeader } from "@/components/page-header"
@@ -16,16 +16,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer"
 import {
   Select,
   SelectContent,
@@ -43,131 +33,63 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { ReliabilityBadge, PriceChangeBadge } from "@/components/status-badge"
-import { useIsMobile } from "@/hooks/use-mobile"
-import { useTranslations, useI18n } from "@/lib/i18n"
+import { useTranslations } from "@/lib/i18n"
 import {
   suppliers as suppliersApi,
   deliveries as deliveriesApi,
-  priceHistory as priceHistoryApi,
-  type Supplier as APISupplier,
-  type Delivery as APIDelivery,
-  type PriceHistoryRecord,
+  type SupplierListItem,
 } from "@/lib/api"
 import { KPICard } from "@/components/kpi-card"
 import type { KPI } from "@/types"
 import {
   TruckIcon,
-  ClockIcon,
-  MailIcon,
-  CalendarIcon,
   PlusIcon,
-  FileTextIcon,
   PackageIcon,
-  CheckCircle2Icon,
-  AlertTriangleIcon,
   Loader2Icon,
+  SearchIcon,
+  MapPinIcon,
+  TrendingUpIcon,
+  CalendarIcon,
+  FileTextIcon,
 } from "lucide-react"
 
-interface SupplierUI {
-  id: string
-  name: string
-  category: string
-  reliability: number
-  avgDeliveryDays: number
-  priceChange: number
-  lastOrder: string
-  contact: string
-}
+const chartConfig = {
+  priceChange: { label: "Price Change", color: "#f97316" },
+} satisfies ChartConfig
 
-interface Delivery {
-  id: string
-  date: string
-  items: number
-  status: "onTime" | "late" | "partial"
-  notes?: string
-}
-
-function mapSupplierToUI(s: APISupplier): SupplierUI {
-  return {
-    id: String(s.id),
-    name: s.name,
-    category: s.category || "General",
-    reliability: s.reliability_score,
-    avgDeliveryDays: s.avg_delivery_days,
-    priceChange: 0, // Will be computed from price history
-    lastOrder: s.updated_at,
-    contact: s.contact_email || s.contact_phone || "",
-  }
-}
-
-function mapDeliveryToUI(d: APIDelivery): Delivery {
-  return {
-    id: String(d.id),
-    date: d.date,
-    items: d.items?.length || 0,
-    status: d.status === "on_time" ? "onTime" : d.status === "late" ? "late" : "partial",
-    notes: d.notes || undefined,
-  }
-}
-
-function DeliveryStatusBadge({ status }: { status: Delivery["status"] }) {
-  const t = useTranslations()
-  switch (status) {
-    case "onTime":
-      return (
-        <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-          <CheckCircle2Icon className="size-3 mr-1" />
-          {t.suppliers.onTime}
-        </Badge>
-      )
-    case "late":
-      return (
-        <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-          <AlertTriangleIcon className="size-3 mr-1" />
-          {t.suppliers.late}
-        </Badge>
-      )
-    case "partial":
-      return (
-        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-          <PackageIcon className="size-3 mr-1" />
-          {t.suppliers.partial}
-        </Badge>
-      )
-  }
-}
-
-function LogDeliveryDialog({ supplier, onLog }: { supplier: SupplierUI; onLog: (delivery: Delivery) => void }) {
-  const t = useTranslations()
+function LogDeliveryDialog({
+  supplierId,
+  supplierName,
+  onSuccess
+}: {
+  supplierId: number
+  supplierName: string
+  onSuccess: () => void
+}) {
   const [open, setOpen] = React.useState(false)
   const [date, setDate] = React.useState(new Date().toISOString().split("T")[0])
-  const [items, setItems] = React.useState("")
-  const [status, setStatus] = React.useState<Delivery["status"]>("onTime")
+  const [status, setStatus] = React.useState<"on_time" | "late" | "partial">("on_time")
   const [notes, setNotes] = React.useState("")
+  const [loading, setLoading] = React.useState(false)
 
   const handleSubmit = async () => {
     try {
+      setLoading(true)
       await deliveriesApi.create({
-        supplier_id: parseInt(supplier.id),
+        supplier_id: supplierId,
         date,
-        status: status === "onTime" ? "on_time" : status,
+        status,
         notes: notes || undefined,
         items: [],
       })
-      onLog({
-        id: `d-${Date.now()}`,
-        date,
-        items: parseInt(items) || 0,
-        status,
-        notes: notes || undefined,
-      })
       setOpen(false)
-      setItems("")
       setNotes("")
-      setStatus("onTime")
+      setStatus("on_time")
+      onSuccess()
     } catch (err) {
       console.error("Failed to create delivery:", err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -175,20 +97,20 @@ function LogDeliveryDialog({ supplier, onLog }: { supplier: SupplierUI; onLog: (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm">
-            <PackageIcon className="size-4 mr-2" />
-            {t.suppliers.logDelivery}
+          <Button variant="outline" size="sm" className="w-full" onClick={(e) => e.stopPropagation()}>
+            <PackageIcon className="size-4 mr-1" />
+            Log Delivery
           </Button>
         }
       />
-      <DialogContent>
+      <DialogContent onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
-          <DialogTitle>{t.suppliers.logDelivery}</DialogTitle>
-          <DialogDescription>{supplier.name}</DialogDescription>
+          <DialogTitle>Log Delivery</DialogTitle>
+          <DialogDescription>{supplierName}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="date">{t.suppliers.deliveryDate}</Label>
+            <Label htmlFor="date">Delivery Date</Label>
             <Input
               id="date"
               type="date"
@@ -197,30 +119,20 @@ function LogDeliveryDialog({ supplier, onLog }: { supplier: SupplierUI; onLog: (
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="items">{t.suppliers.items}</Label>
-            <Input
-              id="items"
-              type="number"
-              value={items}
-              onChange={(e) => setItems(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="status">{t.suppliers.status}</Label>
-            <Select value={status} onValueChange={(v) => v && setStatus(v as Delivery["status"])}>
+            <Label htmlFor="status">Status</Label>
+            <Select value={status} onValueChange={(v) => v && setStatus(v as typeof status)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="onTime">{t.suppliers.onTime}</SelectItem>
-                <SelectItem value="late">{t.suppliers.late}</SelectItem>
-                <SelectItem value="partial">{t.suppliers.partial}</SelectItem>
+                <SelectItem value="on_time">On Time</SelectItem>
+                <SelectItem value="late">Late</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="notes">{t.suppliers.notes}</Label>
+            <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
               value={notes}
@@ -231,179 +143,116 @@ function LogDeliveryDialog({ supplier, onLog }: { supplier: SupplierUI; onLog: (
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
-            {t.suppliers.cancel}
+            Cancel
           </Button>
-          <Button onClick={handleSubmit}>{t.suppliers.save}</Button>
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? <Loader2Icon className="size-4 animate-spin" /> : "Save"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
 
-function SupplierCard({
-  supplier,
-  deliveries,
-  onLogDelivery,
-}: {
-  supplier: SupplierUI
-  deliveries: Delivery[]
-  onLogDelivery: (delivery: Delivery) => void
-}) {
-  const t = useTranslations()
-  const { locale } = useI18n()
-  const isMobile = useIsMobile()
-
+function SupplierCard({ supplier, onRefresh }: { supplier: SupplierListItem; onRefresh: () => void }) {
   return (
-    <Drawer direction={isMobile ? "bottom" : "right"}>
-      <DrawerTrigger asChild>
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
-          <CardHeader className="pb-2">
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-lg">{supplier.name}</CardTitle>
-                <CardDescription>{supplier.category}</CardDescription>
-              </div>
-              <PriceChangeBadge change={supplier.priceChange} />
+    <Card className="transition-colors hover:bg-muted/50 h-full flex flex-col">
+      <Link href={`/suppliers/${supplier.id}`} className="flex-1">
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="text-lg">{supplier.name}</CardTitle>
+              <CardDescription className="capitalize">{supplier.category || "General"}</CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <TruckIcon className="size-4 text-muted-foreground" />
-                <span>{t.suppliers.reliability}:</span>
-                <ReliabilityBadge percentage={supplier.reliability} />
-              </div>
-              <div className="flex items-center gap-2">
-                <ClockIcon className="size-4 text-muted-foreground" />
-                <span>
-                  {supplier.avgDeliveryDays}{" "}
-                  {supplier.avgDeliveryDays === 1 ? t.suppliers.day : t.suppliers.days}{" "}
-                  {t.suppliers.delivery}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader>
-          <DrawerTitle>{supplier.name}</DrawerTitle>
-          <DrawerDescription>{t.suppliers.details}</DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4">
-          <div className="flex gap-2">
-            <Button
-              variant="default"
-              size="sm"
-              render={<Link href={`/bolla?supplier=${encodeURIComponent(supplier.name)}`} />}
+            <Badge
+              variant="outline"
+              className={supplier.open_anomalies > 0 ? "text-red-600 border-red-300" : "text-green-600 border-green-300"}
             >
-              <FileTextIcon className="size-4 mr-2" />
-              {t.suppliers.addDeliveryNote}
-            </Button>
-            <LogDeliveryDialog supplier={supplier} onLog={onLogDelivery} />
+              {supplier.open_anomalies > 0 ? `${supplier.open_anomalies} anomalies` : "OK"}
+            </Badge>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                <TruckIcon className="size-4" />
-                {t.suppliers.reliability}
-              </div>
-              <p className="text-xl font-semibold">{supplier.reliability}%</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <PackageIcon className="size-4 text-muted-foreground" />
+              <span>{supplier.product_count} products</span>
             </div>
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                <ClockIcon className="size-4" />
-                {t.suppliers.deliveryTime}
-              </div>
-              <p className="text-xl font-semibold">
-                {supplier.avgDeliveryDays} {t.suppliers.days}
-              </p>
+            <div className="flex items-center gap-2">
+              <TrendingUpIcon className={`size-4 ${supplier.price_change_pct > 0 ? "text-orange-500" : "text-green-500"}`} />
+              <span className={supplier.price_change_pct > 0 ? "text-orange-600" : "text-green-600"}>
+                {supplier.price_change_pct > 0 ? "+" : ""}{supplier.price_change_pct}%
+              </span>
             </div>
           </div>
 
-          <div className="rounded-lg border p-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <MailIcon className="size-4" />
-              {t.suppliers.contact}
-            </div>
-            <p className="font-medium">{supplier.contact || "N/A"}</p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <TruckIcon className="size-4" />
+            <span>Reliability: <span className="font-medium text-foreground">{supplier.reliability_score}%</span></span>
           </div>
 
-          <div className="rounded-lg border p-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <CalendarIcon className="size-4" />
-              {t.suppliers.lastOrder}
-            </div>
-            <p className="font-medium">
-              {new Date(supplier.lastOrder).toLocaleDateString(
-                locale === "it" ? "it-IT" : "en-US",
-                {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                }
-              )}
-            </p>
-          </div>
-
-          {deliveries.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="font-medium">{t.suppliers.recentDeliveries}</h4>
-              <div className="rounded-lg border divide-y">
-                {deliveries.slice(0, 5).map((delivery) => (
-                  <div key={delivery.id} className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {new Date(delivery.date).toLocaleDateString(
-                          locale === "it" ? "it-IT" : "en-US"
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {delivery.items} {t.suppliers.items}
-                        {delivery.notes && ` - ${delivery.notes}`}
-                      </p>
-                    </div>
-                    <DeliveryStatusBadge status={delivery.status} />
-                  </div>
-                ))}
-              </div>
+          {supplier.address && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPinIcon className="size-4" />
+              <span className="truncate">{supplier.address}</span>
             </div>
           )}
+
+          {supplier.last_delivery_date && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CalendarIcon className="size-4" />
+              <span>Last delivery: {supplier.last_delivery_date}</span>
+            </div>
+          )}
+        </CardContent>
+      </Link>
+      <CardContent className="pt-0 mt-auto">
+        <div className="grid grid-cols-2 gap-2">
+          <LogDeliveryDialog
+            supplierId={supplier.id}
+            supplierName={supplier.name}
+            onSuccess={onRefresh}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            render={<Link href={`/bolla?supplier=${encodeURIComponent(supplier.name)}`} />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FileTextIcon className="size-4 mr-1" />
+            Add Note
+          </Button>
         </div>
-        <DrawerFooter>
-          <DrawerClose asChild>
-            <Button variant="outline">{t.products.close}</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+      </CardContent>
+    </Card>
   )
 }
 
-function AddSupplierDialog({ onAdd }: { onAdd: (supplier: SupplierUI) => void }) {
+function AddSupplierDialog({ onAdd }: { onAdd: () => void }) {
   const t = useTranslations()
   const [open, setOpen] = React.useState(false)
   const [name, setName] = React.useState("")
   const [category, setCategory] = React.useState("")
   const [contact, setContact] = React.useState("")
+  const [address, setAddress] = React.useState("")
   const [loading, setLoading] = React.useState(false)
 
   const handleSubmit = async () => {
     try {
       setLoading(true)
-      const created = await suppliersApi.create({
+      await suppliersApi.create({
         name,
         category,
         contact_email: contact,
-        reliability_score: 100,
-        avg_delivery_days: 2,
+        address: address || undefined,
       })
-      onAdd(mapSupplierToUI(created))
+      onAdd()
       setOpen(false)
       setName("")
       setCategory("")
       setContact("")
+      setAddress("")
     } catch (err) {
       console.error("Failed to create supplier:", err)
     } finally {
@@ -446,6 +295,15 @@ function AddSupplierDialog({ onAdd }: { onAdd: (supplier: SupplierUI) => void })
             />
           </div>
           <div className="grid gap-2">
+            <Label htmlFor="address">Address</Label>
+            <Input
+              id="address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="e.g. Via Roma 123, Milano"
+            />
+          </div>
+          <div className="grid gap-2">
             <Label htmlFor="contact">{t.suppliers.email}</Label>
             <Input
               id="contact"
@@ -471,87 +329,62 @@ function AddSupplierDialog({ onAdd }: { onAdd: (supplier: SupplierUI) => void })
 
 export default function SuppliersPage() {
   const t = useTranslations()
-  const [suppliers, setSuppliers] = React.useState<SupplierUI[]>([])
-  const [deliveries, setDeliveries] = React.useState<Record<string, Delivery[]>>({})
+  const [suppliers, setSuppliers] = React.useState<SupplierListItem[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [search, setSearch] = React.useState("")
+
+  const fetchData = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await suppliersApi.list()
+      setSuppliers(res.items)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   React.useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true)
-        const [suppliersRes, deliveriesRes, priceHistoryRes] = await Promise.all([
-          suppliersApi.list(),
-          deliveriesApi.list(),
-          priceHistoryApi.list(),
-        ])
-
-        // Calculate overall price changes from price history (no supplier link available)
-        const pricesByProduct: Record<number, { prices: { date: string; price: number }[] }> = {}
-
-        for (const record of priceHistoryRes) {
-          if (!pricesByProduct[record.product_id]) {
-            pricesByProduct[record.product_id] = { prices: [] }
-          }
-          pricesByProduct[record.product_id].prices.push({
-            date: record.recorded_at,
-            price: record.price,
-          })
-        }
-
-        // Calculate avg price change across all products
-        let totalChange = 0
-        let productCount = 0
-        for (const data of Object.values(pricesByProduct)) {
-          const sorted = data.prices.sort((a, b) => a.date.localeCompare(b.date))
-          if (sorted.length >= 2) {
-            const oldPrice = sorted[0].price
-            const newPrice = sorted[sorted.length - 1].price
-            const change = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 0
-            totalChange += change
-            productCount++
-          }
-        }
-        const avgPriceChange = productCount > 0 ? totalChange / productCount : 0
-
-        // Distribute price change evenly (no per-supplier data available)
-        const mappedSuppliers = suppliersRes.items.map((s) => ({
-          ...mapSupplierToUI(s),
-          priceChange: parseFloat(avgPriceChange.toFixed(1)),
-        }))
-        setSuppliers(mappedSuppliers)
-
-        // Group deliveries by supplier
-        const deliveriesBySupplier: Record<string, Delivery[]> = {}
-        for (const d of deliveriesRes) {
-          const supplierId = String(d.supplier_id)
-          if (!deliveriesBySupplier[supplierId]) {
-            deliveriesBySupplier[supplierId] = []
-          }
-          deliveriesBySupplier[supplierId].push(mapDeliveryToUI(d))
-        }
-        setDeliveries(deliveriesBySupplier)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load data")
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchData()
-  }, [])
+  }, [fetchData])
+
+  // Filter suppliers by search
+  const filteredSuppliers = React.useMemo(() => {
+    if (!search) return suppliers
+    const lower = search.toLowerCase()
+    return suppliers.filter(
+      (s) =>
+        s.name.toLowerCase().includes(lower) ||
+        s.category?.toLowerCase().includes(lower) ||
+        s.address?.toLowerCase().includes(lower)
+    )
+  }, [suppliers, search])
+
+  // Price trends chart data (top 6 by price change)
+  const priceTrendsData = React.useMemo(() => {
+    return [...suppliers]
+      .filter((s) => s.price_change_pct !== 0)
+      .sort((a, b) => Math.abs(b.price_change_pct) - Math.abs(a.price_change_pct))
+      .slice(0, 6)
+      .map((s) => ({
+        name: s.name.length > 15 ? s.name.slice(0, 15) + "..." : s.name,
+        priceChange: s.price_change_pct,
+        fill: s.price_change_pct > 0 ? "#f97316" : "#22c55e",
+      }))
+  }, [suppliers])
 
   // Calculate KPIs
   const activeSuppliers = suppliers.length
-  const allDeliveries = Object.values(deliveries).flat()
-  const openAnomalies = allDeliveries.filter((d) => d.status === "late" || d.status === "partial").length
+  const openAnomalies = suppliers.reduce((sum, s) => sum + s.open_anomalies, 0)
   const avgReliability = suppliers.length > 0
-    ? suppliers.reduce((sum, s) => sum + s.reliability, 0) / suppliers.length
+    ? suppliers.reduce((sum, s) => sum + s.reliability_score, 0) / suppliers.length
     : 0
   const maxPriceIncrease = suppliers.length > 0
-    ? Math.max(...suppliers.map((s) => s.priceChange))
+    ? Math.max(...suppliers.map((s) => s.price_change_pct), 0)
     : 0
 
-  // KPIs derived from actual data
   const kpis: KPI[] = [
     {
       label: t.suppliers.activeSuppliers,
@@ -578,17 +411,6 @@ export default function SuppliersPage() {
     },
   ]
 
-  const handleAddSupplier = (supplier: SupplierUI) => {
-    setSuppliers((prev) => [...prev, supplier])
-  }
-
-  const handleLogDelivery = (supplierId: string) => (delivery: Delivery) => {
-    setDeliveries((prev) => ({
-      ...prev,
-      [supplierId]: [delivery, ...(prev[supplierId] || [])],
-    }))
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -611,7 +433,7 @@ export default function SuppliersPage() {
       <PageHeader
         title={t.suppliers.title}
         description={t.suppliers.description}
-        actions={<AddSupplierDialog onAdd={handleAddSupplier} />}
+        actions={<AddSupplierDialog onAdd={fetchData} />}
       />
 
       <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
@@ -624,22 +446,64 @@ export default function SuppliersPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @4xl/main:grid-cols-3">
-        {suppliers.map((supplier) => (
-          <SupplierCard
-            key={supplier.id}
-            supplier={supplier}
-            deliveries={deliveries[supplier.id] || []}
-            onLogDelivery={handleLogDelivery(supplier.id)}
+      {/* Price Trends Chart */}
+      {priceTrendsData.length > 0 && (
+        <div className="px-4 lg:px-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUpIcon className="size-5 text-orange-500" />
+                Price Trends
+              </CardTitle>
+              <CardDescription>Price change % by supplier (last 3 months)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[200px] w-full">
+                <BarChart data={priceTrendsData} layout="vertical" margin={{ left: 0, right: 40 }}>
+                  <XAxis type="number" tickFormatter={(v) => `${v}%`} />
+                  <YAxis type="category" dataKey="name" width={120} tickLine={false} axisLine={false} />
+                  <ChartTooltip
+                    content={<ChartTooltipContent formatter={(value) => `${value}%`} />}
+                  />
+                  <Bar dataKey="priceChange" radius={4}>
+                    {priceTrendsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="px-4 lg:px-6">
+        <div className="relative max-w-md">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search suppliers..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
           />
+        </div>
+      </div>
+
+      {/* Supplier Cards */}
+      <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @4xl/main:grid-cols-3">
+        {filteredSuppliers.map((supplier) => (
+          <SupplierCard key={supplier.id} supplier={supplier} onRefresh={fetchData} />
         ))}
       </div>
 
-      {suppliers.length === 0 && (
+      {filteredSuppliers.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <TruckIcon className="size-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium">{t.common.noResults}</h3>
-          <p className="text-muted-foreground">Add your first supplier to get started</p>
+          <p className="text-muted-foreground">
+            {search ? "No suppliers match your search" : "Add your first supplier to get started"}
+          </p>
         </div>
       )}
     </div>

@@ -33,12 +33,48 @@ export interface Supplier {
   updated_at: string
 }
 
+export interface SupplierListItem extends Supplier {
+  product_count: number
+  price_change_pct: number
+  last_delivery_date: string | null
+  open_anomalies: number
+}
+
+export interface PricePoint {
+  date: string
+  price: number
+}
+
+export interface ProductPriceTrend {
+  product_id: number
+  product_name: string
+  unit: string | null
+  prices: PricePoint[]
+}
+
+export interface DeliveryInfo {
+  id: number
+  date: string
+  total: number
+  status: string
+  notes: string | null
+}
+
+export interface SupplierDetail extends Supplier {
+  product_count: number
+  price_change_pct: number
+  last_delivery_date: string | null
+  open_anomalies: number
+  price_trends: ProductPriceTrend[]
+  recent_deliveries: DeliveryInfo[]
+}
+
 export const suppliers = {
   list: (category?: string) =>
-    fetchAPI<{ items: Supplier[]; total: number }>(
+    fetchAPI<{ items: SupplierListItem[]; total: number }>(
       `/suppliers${category ? `?category=${category}` : ""}`
     ),
-  get: (id: number) => fetchAPI<Supplier>(`/suppliers/${id}`),
+  get: (id: number) => fetchAPI<SupplierDetail>(`/suppliers/${id}`),
   create: (data: Partial<Supplier>) =>
     fetchAPI<Supplier>("/suppliers", { method: "POST", body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Supplier>) =>
