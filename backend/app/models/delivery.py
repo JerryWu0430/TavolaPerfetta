@@ -7,7 +7,7 @@ class Delivery(Base):
     __tablename__ = "deliveries"
 
     id = Column(Integer, primary_key=True, index=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False)
     date = Column(Date, nullable=False)
     status = Column(String(20), default="pending")  # pending, on_time, late, partial
     notes = Column(Text)

@@ -24,7 +24,7 @@ class HACCPChecklist(Base):
     __tablename__ = "haccp_checklists"
 
     id = Column(Integer, primary_key=True, index=True)
-    location_id = Column(Integer, ForeignKey("locations.id"))
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"))
     date = Column(Date, nullable=False)
     operator = Column(String(100))
     shift = Column(String(20))  # morning, afternoon, evening
@@ -41,7 +41,7 @@ class HACCPItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     checklist_id = Column(Integer, ForeignKey("haccp_checklists.id"), nullable=False)
-    template_id = Column(Integer, ForeignKey("haccp_templates.id"))
+    template_id = Column(Integer, ForeignKey("haccp_templates.id", ondelete="SET NULL"))
     name = Column(String(100), nullable=False)
     category = Column(String(50))
     value = Column(String(100))  # stores boolean as "true"/"false", numbers, or text

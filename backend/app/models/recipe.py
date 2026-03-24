@@ -23,7 +23,7 @@ class RecipeIngredient(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
     quantity = Column(Float, nullable=False)
     unit = Column(String(20))
     waste_pct = Column(Float, default=0.0)  # waste percentage 0-100

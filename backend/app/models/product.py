@@ -11,7 +11,7 @@ class Product(Base):
     category = Column(String(50))  # vegetable, meat, dairy, seafood, spice, grain
     unit = Column(String(20))  # kg, g, l, ml, pcs
     unit_price = Column(Float, default=0.0)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"))
     sku = Column(String(50))
     min_stock = Column(Float, default=0.0)
     created_at = Column(DateTime, server_default=func.now())

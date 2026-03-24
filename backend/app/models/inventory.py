@@ -7,8 +7,8 @@ class Inventory(Base):
     __tablename__ = "inventory"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), unique=True, nullable=False)
-    location_id = Column(Integer, ForeignKey("locations.id"))
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), unique=True, nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"))
     quantity = Column(Float, default=0.0)
     theoretical_quantity = Column(Float, default=0.0)
     last_count_date = Column(DateTime)

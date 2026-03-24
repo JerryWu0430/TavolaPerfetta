@@ -7,7 +7,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    location_id = Column(Integer, ForeignKey("locations.id"))
+    location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"))
     date = Column(Date, nullable=False)
     total = Column(Float, default=0.0)
     created_at = Column(DateTime, server_default=func.now())
@@ -21,7 +21,7 @@ class OrderItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
-    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="RESTRICT"), nullable=False)
     quantity = Column(Integer, default=1)
     unit_price = Column(Float, nullable=False)
 

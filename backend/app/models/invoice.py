@@ -7,7 +7,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
-    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"))
     invoice_number = Column(String(50))
     date = Column(Date, nullable=False)
     total = Column(Float, default=0.0)
@@ -27,7 +27,7 @@ class InvoiceLine(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"))
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"))
     description = Column(String(255))
     quantity = Column(Float, nullable=False)
     unit = Column(String(20))
@@ -35,3 +35,4 @@ class InvoiceLine(Base):
     total = Column(Float, default=0.0)
 
     invoice = relationship("Invoice", back_populates="lines")
+    product = relationship("Product", backref="invoice_lines")
