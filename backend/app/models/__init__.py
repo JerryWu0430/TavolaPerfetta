@@ -1,3 +1,5 @@
+from .restaurant import Restaurant
+from .restaurant_member import RestaurantMember
 from .location import Location
 from .supplier import Supplier
 from .product import Product
@@ -10,6 +12,8 @@ from .recipe import Recipe, RecipeIngredient
 from .order import Order, OrderItem
 
 __all__ = [
+    "Restaurant",
+    "RestaurantMember",
     "Location",
     "Supplier",
     "Product",

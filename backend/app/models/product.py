@@ -7,6 +7,7 @@ class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     category = Column(String(50))  # vegetable, meat, dairy, seafood, spice, grain
     unit = Column(String(20))  # kg, g, l, ml, pcs
@@ -17,5 +18,6 @@ class Product(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    restaurant = relationship("Restaurant", back_populates="products")
     supplier = relationship("Supplier", back_populates="products")
     inventory = relationship("Inventory", back_populates="product", uselist=False)

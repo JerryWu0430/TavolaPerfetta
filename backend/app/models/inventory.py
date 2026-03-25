@@ -7,6 +7,7 @@ class Inventory(Base):
     __tablename__ = "inventory"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), unique=True, nullable=False)
     location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"))
     quantity = Column(Float, default=0.0)

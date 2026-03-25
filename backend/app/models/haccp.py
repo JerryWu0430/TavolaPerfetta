@@ -8,6 +8,7 @@ class HACCPTemplate(Base):
     __tablename__ = "haccp_templates"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     category = Column(String(50))  # temperature, cleaning, hygiene, storage
     input_type = Column(String(20), default="boolean")  # boolean, number, text
@@ -24,6 +25,7 @@ class HACCPChecklist(Base):
     __tablename__ = "haccp_checklists"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=False, index=True)
     location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"))
     date = Column(Date, nullable=False)
     operator = Column(String(100))

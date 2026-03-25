@@ -1,3 +1,4 @@
+from .auth import router as auth_router
 from .suppliers import router as suppliers_router
 from .products import router as products_router
 from .deliveries import router as deliveries_router
@@ -11,6 +12,7 @@ from .recipes import router as recipes_router
 from .orders import router as orders_router
 
 __all__ = [
+    "auth_router",
     "suppliers_router",
     "products_router",
     "deliveries_router",

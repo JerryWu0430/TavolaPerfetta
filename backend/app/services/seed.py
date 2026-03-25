@@ -3,40 +3,73 @@ from datetime import date, datetime, timedelta
 import random
 from sqlalchemy.orm import Session
 from ..models import (
-    Location, Supplier, Product, Delivery, DeliveryItem,
+    Restaurant, RestaurantMember, Location, Supplier, Product, Delivery, DeliveryItem,
     Inventory, HACCPTemplate, HACCPChecklist, HACCPItem,
     Recipe, RecipeIngredient, Order, OrderItem, PriceHistory
 )
 
 
-def seed_all(db: Session):
-    """Seed all tables with sample data"""
-    seed_locations(db)
-    seed_suppliers(db)
-    seed_products(db)
-    seed_inventory(db)
-    seed_haccp_templates(db)
-    seed_sample_deliveries(db)
-    seed_sample_haccp(db)
-    seed_recipes(db)
-    seed_orders(db)
-    seed_price_history(db)
+def seed_all(db: Session, restaurant_id: int | None = None):
+    """Seed all tables with sample data.
+
+    If restaurant_id is provided, uses that restaurant.
+    Otherwise creates a demo restaurant.
+    """
+    if restaurant_id is None:
+        restaurant_id = seed_restaurant(db)
+
+    seed_locations(db, restaurant_id)
+    seed_suppliers(db, restaurant_id)
+    seed_products(db, restaurant_id)
+    seed_inventory(db, restaurant_id)
+    seed_haccp_templates(db, restaurant_id)
+    seed_sample_deliveries(db, restaurant_id)
+    seed_sample_haccp(db, restaurant_id)
+    seed_recipes(db, restaurant_id)
+    seed_orders(db, restaurant_id)
+    seed_price_history(db, restaurant_id)
 
 
-def seed_locations(db: Session):
-    if db.query(Location).count() > 0:
+def seed_restaurant(db: Session) -> int:
+    """Create demo restaurant and return its ID."""
+    existing = db.query(Restaurant).filter(Restaurant.slug == "demo").first()
+    if existing:
+        return existing.id
+
+    restaurant = Restaurant(
+        name="Ristorante Demo",
+        slug="demo",
+    )
+    db.add(restaurant)
+    db.commit()
+    db.refresh(restaurant)
+
+    # Add a demo admin member (you can add your email here)
+    member = RestaurantMember(
+        email="admin@demo.com",
+        role="admin",
+        restaurant_id=restaurant.id,
+    )
+    db.add(member)
+    db.commit()
+
+    return restaurant.id
+
+
+def seed_locations(db: Session, restaurant_id: int):
+    if db.query(Location).filter(Location.restaurant_id == restaurant_id).count() > 0:
         return
 
     locations = [
-        Location(name="Centro", address="Via Roma 15, Milano"),
-        Location(name="Navigli", address="Ripa di Porta Ticinese 55, Milano"),
+        Location(name="Centro", address="Via Roma 15, Milano", restaurant_id=restaurant_id),
+        Location(name="Navigli", address="Ripa di Porta Ticinese 55, Milano", restaurant_id=restaurant_id),
     ]
     db.add_all(locations)
     db.commit()
 
 
-def seed_suppliers(db: Session):
-    if db.query(Supplier).count() > 0:
+def seed_suppliers(db: Session, restaurant_id: int):
+    if db.query(Supplier).filter(Supplier.restaurant_id == restaurant_id).count() > 0:
         return
 
     suppliers = [
@@ -48,7 +81,8 @@ def seed_suppliers(db: Session):
             contact_phone="+39 02 1234567",
             reliability_score=95.0,
             avg_delivery_days=1.0,
-            payment_terms="net30"
+            payment_terms="net30",
+            restaurant_id=restaurant_id,
         ),
         Supplier(
             name="Macelleria Bianchi",
@@ -58,7 +92,8 @@ def seed_suppliers(db: Session):
             contact_phone="+39 02 2345678",
             reliability_score=98.0,
             avg_delivery_days=1.5,
-            payment_terms="net30"
+            payment_terms="net30",
+            restaurant_id=restaurant_id,
         ),
         Supplier(
             name="Latteria Lombarda",
@@ -68,7 +103,8 @@ def seed_suppliers(db: Session):
             contact_phone="+39 02 3456789",
             reliability_score=92.0,
             avg_delivery_days=1.0,
-            payment_terms="cod"
+            payment_terms="cod",
+            restaurant_id=restaurant_id,
         ),
         Supplier(
             name="Pescheria Adriatico",
@@ -78,7 +114,8 @@ def seed_suppliers(db: Session):
             contact_phone="+39 02 4567890",
             reliability_score=88.0,
             avg_delivery_days=0.5,
-            payment_terms="net15"
+            payment_terms="net15",
+            restaurant_id=restaurant_id,
         ),
         Supplier(
             name="Dispensa Mediterranea",
@@ -88,99 +125,109 @@ def seed_suppliers(db: Session):
             contact_phone="+39 02 5678901",
             reliability_score=99.0,
             avg_delivery_days=3.0,
-            payment_terms="net60"
+            payment_terms="net60",
+            restaurant_id=restaurant_id,
         ),
     ]
     db.add_all(suppliers)
     db.commit()
 
 
-def seed_products(db: Session):
-    if db.query(Product).count() > 0:
+def seed_products(db: Session, restaurant_id: int):
+    if db.query(Product).filter(Product.restaurant_id == restaurant_id).count() > 0:
         return
 
-    suppliers = {s.category: s.id for s in db.query(Supplier).all()}
+    suppliers = {s.category: s.id for s in db.query(Supplier).filter(
+        Supplier.restaurant_id == restaurant_id
+    ).all()}
 
     products = [
         # Produce
-        Product(name="Pomodori San Marzano", category="vegetable", unit="kg", unit_price=3.50, supplier_id=suppliers.get("produce"), min_stock=10),
-        Product(name="Basilico fresco", category="herb", unit="bunch", unit_price=1.20, supplier_id=suppliers.get("produce"), min_stock=5),
-        Product(name="Cipolle dorate", category="vegetable", unit="kg", unit_price=1.80, supplier_id=suppliers.get("produce"), min_stock=8),
-        Product(name="Aglio", category="vegetable", unit="kg", unit_price=8.00, supplier_id=suppliers.get("produce"), min_stock=2),
-        Product(name="Zucchine", category="vegetable", unit="kg", unit_price=2.50, supplier_id=suppliers.get("produce"), min_stock=5),
+        Product(name="Pomodori San Marzano", category="vegetable", unit="kg", unit_price=3.50, supplier_id=suppliers.get("produce"), min_stock=10, restaurant_id=restaurant_id),
+        Product(name="Basilico fresco", category="herb", unit="bunch", unit_price=1.20, supplier_id=suppliers.get("produce"), min_stock=5, restaurant_id=restaurant_id),
+        Product(name="Cipolle dorate", category="vegetable", unit="kg", unit_price=1.80, supplier_id=suppliers.get("produce"), min_stock=8, restaurant_id=restaurant_id),
+        Product(name="Aglio", category="vegetable", unit="kg", unit_price=8.00, supplier_id=suppliers.get("produce"), min_stock=2, restaurant_id=restaurant_id),
+        Product(name="Zucchine", category="vegetable", unit="kg", unit_price=2.50, supplier_id=suppliers.get("produce"), min_stock=5, restaurant_id=restaurant_id),
         # Meat
-        Product(name="Manzo macinato", category="meat", unit="kg", unit_price=12.00, supplier_id=suppliers.get("meat"), min_stock=5),
-        Product(name="Pancetta", category="meat", unit="kg", unit_price=15.00, supplier_id=suppliers.get("meat"), min_stock=3),
-        Product(name="Guanciale", category="meat", unit="kg", unit_price=18.00, supplier_id=suppliers.get("meat"), min_stock=2),
-        Product(name="Salsiccia italiana", category="meat", unit="kg", unit_price=10.00, supplier_id=suppliers.get("meat"), min_stock=4),
+        Product(name="Manzo macinato", category="meat", unit="kg", unit_price=12.00, supplier_id=suppliers.get("meat"), min_stock=5, restaurant_id=restaurant_id),
+        Product(name="Pancetta", category="meat", unit="kg", unit_price=15.00, supplier_id=suppliers.get("meat"), min_stock=3, restaurant_id=restaurant_id),
+        Product(name="Guanciale", category="meat", unit="kg", unit_price=18.00, supplier_id=suppliers.get("meat"), min_stock=2, restaurant_id=restaurant_id),
+        Product(name="Salsiccia italiana", category="meat", unit="kg", unit_price=10.00, supplier_id=suppliers.get("meat"), min_stock=4, restaurant_id=restaurant_id),
         # Dairy
-        Product(name="Parmigiano Reggiano 24 mesi", category="cheese", unit="kg", unit_price=22.00, supplier_id=suppliers.get("dairy"), min_stock=3),
-        Product(name="Mozzarella di Bufala", category="cheese", unit="kg", unit_price=16.00, supplier_id=suppliers.get("dairy"), min_stock=4),
-        Product(name="Ricotta fresca", category="cheese", unit="kg", unit_price=8.00, supplier_id=suppliers.get("dairy"), min_stock=3),
-        Product(name="Burro", category="dairy", unit="kg", unit_price=12.00, supplier_id=suppliers.get("dairy"), min_stock=2),
-        Product(name="Panna fresca", category="dairy", unit="l", unit_price=6.00, supplier_id=suppliers.get("dairy"), min_stock=5),
+        Product(name="Parmigiano Reggiano 24 mesi", category="cheese", unit="kg", unit_price=22.00, supplier_id=suppliers.get("dairy"), min_stock=3, restaurant_id=restaurant_id),
+        Product(name="Mozzarella di Bufala", category="cheese", unit="kg", unit_price=16.00, supplier_id=suppliers.get("dairy"), min_stock=4, restaurant_id=restaurant_id),
+        Product(name="Ricotta fresca", category="cheese", unit="kg", unit_price=8.00, supplier_id=suppliers.get("dairy"), min_stock=3, restaurant_id=restaurant_id),
+        Product(name="Burro", category="dairy", unit="kg", unit_price=12.00, supplier_id=suppliers.get("dairy"), min_stock=2, restaurant_id=restaurant_id),
+        Product(name="Panna fresca", category="dairy", unit="l", unit_price=6.00, supplier_id=suppliers.get("dairy"), min_stock=5, restaurant_id=restaurant_id),
         # Seafood
-        Product(name="Gamberi freschi", category="seafood", unit="kg", unit_price=25.00, supplier_id=suppliers.get("seafood"), min_stock=2),
-        Product(name="Vongole veraci", category="seafood", unit="kg", unit_price=18.00, supplier_id=suppliers.get("seafood"), min_stock=3),
-        Product(name="Calamari", category="seafood", unit="kg", unit_price=15.00, supplier_id=suppliers.get("seafood"), min_stock=2),
+        Product(name="Gamberi freschi", category="seafood", unit="kg", unit_price=25.00, supplier_id=suppliers.get("seafood"), min_stock=2, restaurant_id=restaurant_id),
+        Product(name="Vongole veraci", category="seafood", unit="kg", unit_price=18.00, supplier_id=suppliers.get("seafood"), min_stock=3, restaurant_id=restaurant_id),
+        Product(name="Calamari", category="seafood", unit="kg", unit_price=15.00, supplier_id=suppliers.get("seafood"), min_stock=2, restaurant_id=restaurant_id),
         # Dry goods
-        Product(name="Spaghetti De Cecco", category="pasta", unit="kg", unit_price=2.50, supplier_id=suppliers.get("dry_goods"), min_stock=20),
-        Product(name="Penne rigate", category="pasta", unit="kg", unit_price=2.30, supplier_id=suppliers.get("dry_goods"), min_stock=15),
-        Product(name="Olio EVO Toscano", category="oil", unit="l", unit_price=12.00, supplier_id=suppliers.get("dry_goods"), min_stock=10),
-        Product(name="Farina 00", category="flour", unit="kg", unit_price=1.50, supplier_id=suppliers.get("dry_goods"), min_stock=25),
+        Product(name="Spaghetti De Cecco", category="pasta", unit="kg", unit_price=2.50, supplier_id=suppliers.get("dry_goods"), min_stock=20, restaurant_id=restaurant_id),
+        Product(name="Penne rigate", category="pasta", unit="kg", unit_price=2.30, supplier_id=suppliers.get("dry_goods"), min_stock=15, restaurant_id=restaurant_id),
+        Product(name="Olio EVO Toscano", category="oil", unit="l", unit_price=12.00, supplier_id=suppliers.get("dry_goods"), min_stock=10, restaurant_id=restaurant_id),
+        Product(name="Farina 00", category="flour", unit="kg", unit_price=1.50, supplier_id=suppliers.get("dry_goods"), min_stock=25, restaurant_id=restaurant_id),
     ]
     db.add_all(products)
     db.commit()
 
 
-def seed_inventory(db: Session):
-    if db.query(Inventory).count() > 0:
+def seed_inventory(db: Session, restaurant_id: int):
+    if db.query(Inventory).filter(Inventory.restaurant_id == restaurant_id).count() > 0:
         return
 
-    products = db.query(Product).all()
-    location = db.query(Location).first()
+    products = db.query(Product).filter(Product.restaurant_id == restaurant_id).all()
+    location = db.query(Location).filter(Location.restaurant_id == restaurant_id).first()
 
     for product in products:
-        qty = product.min_stock * 1.5  # 50% above min stock
+        qty = product.min_stock * 1.5
         inv = Inventory(
             product_id=product.id,
             location_id=location.id if location else None,
             quantity=qty,
             theoretical_quantity=qty,
-            last_count_date=datetime.utcnow()
+            last_count_date=datetime.utcnow(),
+            restaurant_id=restaurant_id,
         )
         db.add(inv)
     db.commit()
 
 
-def seed_haccp_templates(db: Session):
-    if db.query(HACCPTemplate).count() > 0:
+def seed_haccp_templates(db: Session, restaurant_id: int):
+    if db.query(HACCPTemplate).filter(HACCPTemplate.restaurant_id == restaurant_id).count() > 0:
         return
 
     templates = [
-        HACCPTemplate(name="Frigo principale", category="temperature", input_type="number", min_value=0, max_value=4, unit="°C", sort_order=1),
-        HACCPTemplate(name="Congelatore", category="temperature", input_type="number", min_value=-22, max_value=-18, unit="°C", sort_order=2),
-        HACCPTemplate(name="Frigo pesce", category="temperature", input_type="number", min_value=0, max_value=2, unit="°C", sort_order=3),
-        HACCPTemplate(name="Pulizia superfici lavoro", category="cleaning", input_type="boolean", sort_order=4),
-        HACCPTemplate(name="Pulizia pavimenti", category="cleaning", input_type="boolean", sort_order=5),
-        HACCPTemplate(name="Lavaggio mani personale", category="hygiene", input_type="boolean", sort_order=6),
-        HACCPTemplate(name="Uniformi pulite", category="hygiene", input_type="boolean", sort_order=7),
-        HACCPTemplate(name="Rotazione FIFO verificata", category="storage", input_type="boolean", sort_order=8),
-        HACCPTemplate(name="Scadenze controllate", category="storage", input_type="boolean", sort_order=9),
+        HACCPTemplate(name="Frigo principale", category="temperature", input_type="number", min_value=0, max_value=4, unit="°C", sort_order=1, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Congelatore", category="temperature", input_type="number", min_value=-22, max_value=-18, unit="°C", sort_order=2, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Frigo pesce", category="temperature", input_type="number", min_value=0, max_value=2, unit="°C", sort_order=3, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Pulizia superfici lavoro", category="cleaning", input_type="boolean", sort_order=4, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Pulizia pavimenti", category="cleaning", input_type="boolean", sort_order=5, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Lavaggio mani personale", category="hygiene", input_type="boolean", sort_order=6, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Uniformi pulite", category="hygiene", input_type="boolean", sort_order=7, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Rotazione FIFO verificata", category="storage", input_type="boolean", sort_order=8, restaurant_id=restaurant_id),
+        HACCPTemplate(name="Scadenze controllate", category="storage", input_type="boolean", sort_order=9, restaurant_id=restaurant_id),
     ]
     db.add_all(templates)
     db.commit()
 
 
-def seed_sample_deliveries(db: Session):
-    if db.query(Delivery).count() > 0:
+def seed_sample_deliveries(db: Session, restaurant_id: int):
+    if db.query(Delivery).filter(Delivery.restaurant_id == restaurant_id).count() > 0:
         return
 
-    supplier = db.query(Supplier).filter(Supplier.category == "produce").first()
+    supplier = db.query(Supplier).filter(
+        Supplier.category == "produce",
+        Supplier.restaurant_id == restaurant_id,
+    ).first()
     if not supplier:
         return
 
-    products = db.query(Product).filter(Product.supplier_id == supplier.id).limit(3).all()
+    products = db.query(Product).filter(
+        Product.supplier_id == supplier.id,
+        Product.restaurant_id == restaurant_id,
+    ).limit(3).all()
 
     today = date.today()
     for i in range(5):
@@ -188,7 +235,8 @@ def seed_sample_deliveries(db: Session):
             supplier_id=supplier.id,
             date=today - timedelta(days=i*2),
             status=["on_time", "on_time", "late", "on_time", "partial"][i],
-            notes=None
+            notes=None,
+            restaurant_id=restaurant_id,
         )
         db.add(delivery)
         db.flush()
@@ -207,12 +255,15 @@ def seed_sample_deliveries(db: Session):
     db.commit()
 
 
-def seed_sample_haccp(db: Session):
-    if db.query(HACCPChecklist).count() > 0:
+def seed_sample_haccp(db: Session, restaurant_id: int):
+    if db.query(HACCPChecklist).filter(HACCPChecklist.restaurant_id == restaurant_id).count() > 0:
         return
 
-    templates = db.query(HACCPTemplate).filter(HACCPTemplate.is_active == True).all()
-    location = db.query(Location).first()
+    templates = db.query(HACCPTemplate).filter(
+        HACCPTemplate.is_active == True,
+        HACCPTemplate.restaurant_id == restaurant_id,
+    ).all()
+    location = db.query(Location).filter(Location.restaurant_id == restaurant_id).first()
 
     today = date.today()
     for i in range(7):
@@ -221,7 +272,8 @@ def seed_sample_haccp(db: Session):
             date=today - timedelta(days=i),
             operator="Chef Marco",
             shift="morning",
-            status="passed" if i != 2 else "failed"
+            status="passed" if i != 2 else "failed",
+            restaurant_id=restaurant_id,
         )
         db.add(checklist)
         db.flush()
@@ -247,11 +299,13 @@ def seed_sample_haccp(db: Session):
     db.commit()
 
 
-def seed_recipes(db: Session):
-    if db.query(Recipe).count() > 0:
+def seed_recipes(db: Session, restaurant_id: int):
+    if db.query(Recipe).filter(Recipe.restaurant_id == restaurant_id).count() > 0:
         return
 
-    products = {p.name: p for p in db.query(Product).all()}
+    products = {p.name: p for p in db.query(Product).filter(
+        Product.restaurant_id == restaurant_id
+    ).all()}
 
     recipes_data = [
         {
@@ -350,7 +404,8 @@ def seed_recipes(db: Session):
             category=data["category"],
             description=data.get("description"),
             price=data["price"],
-            is_active=True
+            is_active=True,
+            restaurant_id=restaurant_id,
         )
         db.add(recipe)
         db.flush()
@@ -371,26 +426,27 @@ def seed_recipes(db: Session):
     db.commit()
 
 
-def seed_orders(db: Session):
-    if db.query(Order).count() > 0:
+def seed_orders(db: Session, restaurant_id: int):
+    if db.query(Order).filter(Order.restaurant_id == restaurant_id).count() > 0:
         return
 
-    recipes = db.query(Recipe).all()
-    location = db.query(Location).first()
+    recipes = db.query(Recipe).filter(Recipe.restaurant_id == restaurant_id).all()
+    location = db.query(Location).filter(Location.restaurant_id == restaurant_id).first()
 
     if not recipes:
         return
 
     today = date.today()
-    for i in range(30):  # Last 30 days
+    for i in range(30):
         order_date = today - timedelta(days=i)
-        num_orders = random.randint(20, 50)  # Orders per day
+        num_orders = random.randint(20, 50)
 
         for _ in range(num_orders):
             order = Order(
                 location_id=location.id if location else None,
                 date=order_date,
-                total=0.0
+                total=0.0,
+                restaurant_id=restaurant_id,
             )
             db.add(order)
             db.flush()
@@ -414,25 +470,24 @@ def seed_orders(db: Session):
     db.commit()
 
 
-def seed_price_history(db: Session):
-    if db.query(PriceHistory).count() > 0:
+def seed_price_history(db: Session, restaurant_id: int):
+    if db.query(PriceHistory).filter(PriceHistory.restaurant_id == restaurant_id).count() > 0:
         return
 
-    products = db.query(Product).all()
+    products = db.query(Product).filter(Product.restaurant_id == restaurant_id).all()
     today = datetime.utcnow()
 
     for product in products:
-        # Record price for last 6 months
         for month in range(6):
             recorded_at = today - timedelta(days=month * 30)
-            # Slight variation from current price
-            variation = random.uniform(-0.1, 0.15)  # -10% to +15%
+            variation = random.uniform(-0.1, 0.15)
             price = product.unit_price * (1 - variation * (month / 6))
 
             record = PriceHistory(
                 product_id=product.id,
                 price=round(price, 2),
-                recorded_at=recorded_at
+                recorded_at=recorded_at,
+                restaurant_id=restaurant_id,
             )
             db.add(record)
 

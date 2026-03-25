@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from datetime import datetime, timedelta
 from ..database import get_db
+from ..auth import get_current_user, CurrentUser
 from ..models.recipe import Recipe, RecipeIngredient
 from ..models.product import Product
 from ..models.order import Order, OrderItem
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/recipes", tags=["recipes"])
 
 
 def calculate_cost_from_loaded(ingredients: list) -> float:
-    """Calculate total cost from pre-loaded ingredients (with product relationship)."""
+    """Calculate total cost from pre-loaded ingredients."""
     total = 0.0
     for ing in ingredients:
         if ing.product:
@@ -41,9 +42,12 @@ def list_recipes(
     limit: int = 100,
     category: str | None = None,
     is_active: bool | None = None,
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Recipe).options(
+    query = db.query(Recipe).filter(
+        Recipe.restaurant_id == user.restaurant_id
+    ).options(
         joinedload(Recipe.ingredients).joinedload(RecipeIngredient.product)
     )
     if category:
@@ -53,7 +57,6 @@ def list_recipes(
 
     recipes = query.offset(skip).limit(limit).all()
 
-    # Calculate sales per week (last 7 days)
     week_ago = datetime.now() - timedelta(days=7)
 
     result = []
@@ -61,10 +64,10 @@ def list_recipes(
         cost = calculate_cost_from_loaded(recipe.ingredients)
         margin = calculate_margin(recipe.price, cost)
 
-        # Get sales count
         sales = db.query(func.sum(OrderItem.quantity)).join(Order).filter(
             OrderItem.recipe_id == recipe.id,
-            Order.date >= week_ago.date()
+            Order.date >= week_ago.date(),
+            Order.restaurant_id == user.restaurant_id,
         ).scalar() or 0
 
         result.append(RecipeListResponse(
@@ -81,30 +84,32 @@ def list_recipes(
     return result
 
 
-def get_weekly_sales(recipe_id: int, db: Session) -> list[WeeklySales]:
+def get_weekly_sales(recipe_id: int, restaurant_id: int, db: Session) -> list[WeeklySales]:
     """Get sales for last 4 weeks."""
     result = []
     now = datetime.now()
-    for i in range(4, 0, -1):  # W1=oldest, W4=most recent
+    for i in range(4, 0, -1):
         week_start = now - timedelta(days=7 * i)
         week_end = now - timedelta(days=7 * (i - 1))
         sales = db.query(func.sum(OrderItem.quantity)).join(Order).filter(
             OrderItem.recipe_id == recipe_id,
             Order.date >= week_start.date(),
-            Order.date < week_end.date()
+            Order.date < week_end.date(),
+            Order.restaurant_id == restaurant_id,
         ).scalar() or 0
         result.append(WeeklySales(week=f"W{5 - i}", quantity=int(sales)))
     return result
 
 
-def is_best_seller(recipe_id: int, db: Session) -> bool:
+def is_best_seller(recipe_id: int, restaurant_id: int, db: Session) -> bool:
     """Check if recipe is in top 3 by sales in last 4 weeks."""
     four_weeks_ago = datetime.now() - timedelta(days=28)
     top_recipes = db.query(
         OrderItem.recipe_id,
         func.sum(OrderItem.quantity).label("total")
     ).join(Order).filter(
-        Order.date >= four_weeks_ago.date()
+        Order.date >= four_weeks_ago.date(),
+        Order.restaurant_id == restaurant_id,
     ).group_by(OrderItem.recipe_id).order_by(
         func.sum(OrderItem.quantity).desc()
     ).limit(3).all()
@@ -112,12 +117,19 @@ def is_best_seller(recipe_id: int, db: Session) -> bool:
 
 
 @router.get("/{recipe_id}", response_model=RecipeResponse)
-def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
-    recipe = db.query(Recipe).options(
+def get_recipe(
+    recipe_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    recipe = db.query(Recipe).filter(
+        Recipe.id == recipe_id,
+        Recipe.restaurant_id == user.restaurant_id,
+    ).options(
         joinedload(Recipe.ingredients)
         .joinedload(RecipeIngredient.product)
         .joinedload(Product.supplier)
-    ).filter(Recipe.id == recipe_id).first()
+    ).first()
 
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
@@ -126,7 +138,6 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
     margin = calculate_margin(recipe.price, cost)
     margin_value = recipe.price - cost
 
-    # Build ingredient responses with product and supplier info (all pre-loaded)
     ingredients = []
     for ing in recipe.ingredients:
         waste_mult = 1 + (ing.waste_pct or 0) / 100
@@ -144,8 +155,8 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
             cost=round(ing_cost, 2),
         ))
 
-    weekly_sales = get_weekly_sales(recipe_id, db)
-    best_seller = is_best_seller(recipe_id, db)
+    weekly_sales = get_weekly_sales(recipe_id, user.restaurant_id, db)
+    best_seller = is_best_seller(recipe_id, user.restaurant_id, db)
 
     return RecipeResponse(
         id=recipe.id,
@@ -166,18 +177,22 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=RecipeResponse)
-def create_recipe(data: RecipeCreate, db: Session = Depends(get_db)):
+def create_recipe(
+    data: RecipeCreate,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     recipe = Recipe(
         name=data.name,
         category=data.category,
         description=data.description,
         price=data.price,
         is_active=data.is_active,
+        restaurant_id=user.restaurant_id,
     )
     db.add(recipe)
     db.flush()
 
-    # Add ingredients
     for ing_data in data.ingredients:
         ingredient = RecipeIngredient(
             recipe_id=recipe.id,
@@ -191,27 +206,30 @@ def create_recipe(data: RecipeCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(recipe)
 
-    # Return with calculated values
-    return get_recipe(recipe.id, db)
+    return get_recipe(recipe.id, user, db)
 
 
 @router.patch("/{recipe_id}", response_model=RecipeResponse)
-def update_recipe(recipe_id: int, data: RecipeUpdate, db: Session = Depends(get_db)):
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+def update_recipe(
+    recipe_id: int,
+    data: RecipeUpdate,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    recipe = db.query(Recipe).filter(
+        Recipe.id == recipe_id,
+        Recipe.restaurant_id == user.restaurant_id,
+    ).first()
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    # Update basic fields
     update_data = data.model_dump(exclude_unset=True, exclude={"ingredients"})
     for key, value in update_data.items():
         setattr(recipe, key, value)
 
-    # Update ingredients if provided
     if data.ingredients is not None:
-        # Remove existing ingredients
         db.query(RecipeIngredient).filter(RecipeIngredient.recipe_id == recipe_id).delete()
 
-        # Add new ingredients
         for ing_data in data.ingredients:
             ingredient = RecipeIngredient(
                 recipe_id=recipe_id,
@@ -223,12 +241,19 @@ def update_recipe(recipe_id: int, data: RecipeUpdate, db: Session = Depends(get_
             db.add(ingredient)
 
     db.commit()
-    return get_recipe(recipe_id, db)
+    return get_recipe(recipe_id, user, db)
 
 
 @router.delete("/{recipe_id}")
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+def delete_recipe(
+    recipe_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    recipe = db.query(Recipe).filter(
+        Recipe.id == recipe_id,
+        Recipe.restaurant_id == user.restaurant_id,
+    ).first()
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     db.delete(recipe)

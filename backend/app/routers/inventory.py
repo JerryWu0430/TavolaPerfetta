@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from ..database import get_db
-from ..models import Inventory, Product, Supplier
+from ..auth import get_current_user, CurrentUser
+from ..models import Inventory, Product
 from ..schemas import InventoryUpdate, InventoryResponse
 from ..schemas.inventory import InventoryWithProduct
 
@@ -14,10 +15,12 @@ def list_inventory(
     limit: int = 100,
     location_id: int | None = None,
     low_stock: bool = False,
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Eager load product AND supplier in single query (fixes N+1)
-    query = db.query(Inventory).join(Product).options(
+    query = db.query(Inventory).join(Product).filter(
+        Inventory.restaurant_id == user.restaurant_id
+    ).options(
         joinedload(Inventory.product).joinedload(Product.supplier)
     )
     if location_id:
@@ -30,7 +33,6 @@ def list_inventory(
         if inv.theoretical_quantity > 0:
             variance = ((inv.quantity - inv.theoretical_quantity) / inv.theoretical_quantity) * 100
 
-        # Supplier already loaded via joinedload
         supplier_name = inv.product.supplier.name if inv.product.supplier else None
 
         item = InventoryWithProduct(
@@ -57,16 +59,31 @@ def list_inventory(
 
 
 @router.get("/{inventory_id}", response_model=InventoryResponse)
-def get_inventory(inventory_id: int, db: Session = Depends(get_db)):
-    inv = db.query(Inventory).filter(Inventory.id == inventory_id).first()
+def get_inventory(
+    inventory_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = db.query(Inventory).filter(
+        Inventory.id == inventory_id,
+        Inventory.restaurant_id == user.restaurant_id,
+    ).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Inventory not found")
     return inv
 
 
 @router.patch("/{inventory_id}", response_model=InventoryResponse)
-def update_inventory(inventory_id: int, data: InventoryUpdate, db: Session = Depends(get_db)):
-    inv = db.query(Inventory).filter(Inventory.id == inventory_id).first()
+def update_inventory(
+    inventory_id: int,
+    data: InventoryUpdate,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = db.query(Inventory).filter(
+        Inventory.id == inventory_id,
+        Inventory.restaurant_id == user.restaurant_id,
+    ).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Inventory not found")
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -77,13 +94,26 @@ def update_inventory(inventory_id: int, data: InventoryUpdate, db: Session = Dep
 
 
 @router.post("/count/{product_id}", response_model=InventoryResponse)
-def record_count(product_id: int, quantity: float, location_id: int | None = None, db: Session = Depends(get_db)):
+def record_count(
+    product_id: int,
+    quantity: float,
+    location_id: int | None = None,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Record a physical inventory count"""
     from datetime import datetime
 
-    inv = db.query(Inventory).filter(Inventory.product_id == product_id).first()
+    inv = db.query(Inventory).filter(
+        Inventory.product_id == product_id,
+        Inventory.restaurant_id == user.restaurant_id,
+    ).first()
     if not inv:
-        inv = Inventory(product_id=product_id, location_id=location_id)
+        inv = Inventory(
+            product_id=product_id,
+            location_id=location_id,
+            restaurant_id=user.restaurant_id,
+        )
         db.add(inv)
 
     inv.quantity = quantity

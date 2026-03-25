@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
+from .config import get_settings
 from .routers import (
+    auth_router,
     suppliers_router,
     products_router,
     deliveries_router,
@@ -15,6 +17,8 @@ from .routers import (
     orders_router,
 )
 
+settings = get_settings()
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
@@ -24,16 +28,24 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS for Next.js frontend
+# CORS - allow frontend origins
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+if settings.frontend_url and settings.frontend_url not in origins:
+    origins.append(settings.frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(suppliers_router)
 app.include_router(products_router)
 app.include_router(deliveries_router)

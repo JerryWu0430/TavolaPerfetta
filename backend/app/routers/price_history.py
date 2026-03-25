@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime
 from ..database import get_db
+from ..auth import get_current_user, CurrentUser
 from ..models.price_history import PriceHistory
 from ..schemas.price_history import PriceHistoryCreate, PriceHistoryResponse
 
@@ -15,9 +16,10 @@ def list_price_history(
     end_date: datetime | None = None,
     skip: int = 0,
     limit: int = 100,
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(PriceHistory)
+    query = db.query(PriceHistory).filter(PriceHistory.restaurant_id == user.restaurant_id)
     if product_id:
         query = query.filter(PriceHistory.product_id == product_id)
     if start_date:
@@ -28,8 +30,12 @@ def list_price_history(
 
 
 @router.post("", response_model=PriceHistoryResponse)
-def create_price_history(data: PriceHistoryCreate, db: Session = Depends(get_db)):
-    record = PriceHistory(**data.model_dump())
+def create_price_history(
+    data: PriceHistoryCreate,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    record = PriceHistory(**data.model_dump(), restaurant_id=user.restaurant_id)
     db.add(record)
     db.commit()
     db.refresh(record)

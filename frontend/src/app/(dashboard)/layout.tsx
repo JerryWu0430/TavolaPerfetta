@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { I18nProvider } from "@/lib/i18n"
+import { ProtectedRoute } from "@/components/protected-route"
 
 export default function DashboardLayout({
   children,
@@ -8,6 +9,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
+    <ProtectedRoute>
     <I18nProvider>
     <SidebarProvider
       style={
@@ -26,5 +28,6 @@ export default function DashboardLayout({
       </SidebarInset>
     </SidebarProvider>
     </I18nProvider>
+    </ProtectedRoute>
   )
 }

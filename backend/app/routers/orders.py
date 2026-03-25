@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from datetime import date
 from ..database import get_db
+from ..auth import get_current_user, CurrentUser
 from ..models.order import Order, OrderItem
 from ..models.recipe import Recipe, RecipeIngredient
 from ..models.inventory import Inventory
@@ -10,7 +11,7 @@ from ..schemas.order import OrderCreate, OrderResponse, OrderItemResponse
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
-def deduct_inventory_for_order(db: Session, order_items: list):
+def deduct_inventory_for_order(db: Session, order_items: list, restaurant_id: int):
     """Deduct inventory based on recipe ingredients for each order item."""
     for item in order_items:
         recipe = db.query(Recipe).options(
@@ -25,7 +26,8 @@ def deduct_inventory_for_order(db: Session, order_items: list):
             qty_to_deduct = ing.quantity * item.quantity * waste_mult
 
             inv = db.query(Inventory).filter(
-                Inventory.product_id == ing.product_id
+                Inventory.product_id == ing.product_id,
+                Inventory.restaurant_id == restaurant_id,
             ).first()
 
             if inv:
@@ -39,9 +41,12 @@ def list_orders(
     location_id: int | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Order).options(
+    query = db.query(Order).filter(
+        Order.restaurant_id == user.restaurant_id
+    ).options(
         joinedload(Order.items).joinedload(OrderItem.recipe)
     )
     if location_id:
@@ -77,10 +82,17 @@ def list_orders(
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
-def get_order(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(Order).options(
+def get_order(
+    order_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.restaurant_id == user.restaurant_id,
+    ).options(
         joinedload(Order.items).joinedload(OrderItem.recipe)
-    ).filter(Order.id == order_id).first()
+    ).first()
 
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -106,19 +118,22 @@ def get_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=OrderResponse)
-def create_order(data: OrderCreate, db: Session = Depends(get_db)):
-    # Calculate total from items
+def create_order(
+    data: OrderCreate,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     total = sum(item.quantity * item.unit_price for item in data.items)
 
     order = Order(
         location_id=data.location_id,
         date=data.date,
         total=total,
+        restaurant_id=user.restaurant_id,
     )
     db.add(order)
     db.flush()
 
-    # Add items
     order_items = []
     for item_data in data.items:
         item = OrderItem(
@@ -130,18 +145,24 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
         db.add(item)
         order_items.append(item)
 
-    # Deduct inventory based on recipe ingredients
-    deduct_inventory_for_order(db, order_items)
+    deduct_inventory_for_order(db, order_items, user.restaurant_id)
 
     db.commit()
     db.refresh(order)
 
-    return get_order(order.id, db)
+    return get_order(order.id, user, db)
 
 
 @router.delete("/{order_id}")
-def delete_order(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(Order).filter(Order.id == order_id).first()
+def delete_order(
+    order_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.restaurant_id == user.restaurant_id,
+    ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     db.delete(order)

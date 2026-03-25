@@ -1,10 +1,30 @@
+import { createClient } from "./supabase"
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") {
+    return {}
+  }
+
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (session?.access_token) {
+    return { Authorization: `Bearer ${session.access_token}` }
+  }
+
+  return {}
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const authHeaders = await getAuthHeaders()
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders,
       ...options?.headers,
     },
   })
@@ -186,7 +206,7 @@ export interface InvoiceLineCreate {
   quantity: number
   unit?: string
   unit_price: number
-  total?: number  // auto-calculated if not provided
+  total?: number
 }
 
 export interface InvoiceCreate {
@@ -497,12 +517,14 @@ export interface OCRResult {
 
 export const ocr = {
   processInvoice: async (file: File): Promise<OCRResult> => {
+    const authHeaders = await getAuthHeaders()
     const formData = new FormData()
     formData.append("file", file)
 
     const res = await fetch(`${API_BASE}/ocr/invoice`, {
       method: "POST",
       body: formData,
+      headers: authHeaders,
     })
 
     if (!res.ok) {

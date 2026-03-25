@@ -7,6 +7,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=False, index=True)
     location_id = Column(Integer, ForeignKey("locations.id", ondelete="RESTRICT"))
     date = Column(Date, nullable=False)
     total = Column(Float, default=0.0)

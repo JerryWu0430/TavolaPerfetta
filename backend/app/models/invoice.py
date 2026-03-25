@@ -7,6 +7,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(Integer, ForeignKey("restaurants.id"), nullable=False, index=True)
     supplier_id = Column(Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"))
     invoice_number = Column(String(50))
     date = Column(Date, nullable=False)
