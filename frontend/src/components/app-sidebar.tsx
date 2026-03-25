@@ -19,13 +19,8 @@ import {
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { useTranslations, useI18n, type Locale } from "@/lib/i18n"
+import { useAuth } from "@/lib/auth-context"
 import { HomeIcon, PackageIcon, TruckIcon, WarehouseIcon, CalendarIcon, ShieldCheckIcon, BarChart3Icon, Settings2Icon, CircleHelpIcon, SearchIcon, UtensilsCrossedIcon, FileTextIcon, LanguagesIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
-
-const user = {
-  name: "Chef Marco",
-  email: "marco@tavolaperfetta.it",
-  avatar: "/avatars/chef.jpg",
-}
 
 const languages: { code: Locale; label: string; flag: string }[] = [
   { code: "en", label: "English", flag: "🇬🇧" },
@@ -54,6 +49,7 @@ function SidebarToggleArrow() {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const t = useTranslations()
   const { locale, setLocale } = useI18n()
+  const { user, signOut } = useAuth()
 
   const navMain = [
     { title: t.nav.home, url: "/", icon: <HomeIcon /> },
@@ -106,7 +102,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarSeparator />
-        <NavUser user={user} />
+        {user && (
+          <NavUser
+            user={{
+              name: user.restaurant_name || user.email.split("@")[0],
+              email: user.email,
+              role: user.role,
+            }}
+            onSignOut={signOut}
+          />
+        )}
       </SidebarFooter>
     </Sidebar>
   )
