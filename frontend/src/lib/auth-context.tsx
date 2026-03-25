@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
 import { createClient } from "./supabase"
-import type { User, Session } from "@supabase/supabase-js"
+import type { Session } from "@supabase/supabase-js"
 
 interface AuthUser {
   id: string
@@ -17,7 +17,9 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   error: string | null
-  signInWithGoogle: () => Promise<void>
+  signInWithMagicLink: (email: string) => Promise<{ success: boolean; error?: string }>
+  signInWithPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
 }
 
@@ -91,19 +93,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [supabase, fetchUserInfo])
 
-  const signInWithGoogle = async () => {
+  const signInWithMagicLink = async (email: string) => {
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+    setError(null)
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
+    setLoading(false)
+
     if (error) {
       setError(error.message)
-      setLoading(false)
+      return { success: false, error: error.message }
     }
+
+    return { success: true }
+  }
+
+  const signInWithPassword = async (email: string, password: string) => {
+    setLoading(true)
+    setError(null)
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    setLoading(false)
+
+    if (error) {
+      setError(error.message)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
+  }
+
+  const signUp = async (email: string, password: string) => {
+    setLoading(true)
+    setError(null)
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    setLoading(false)
+
+    if (error) {
+      setError(error.message)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true }
   }
 
   const signOut = async () => {
@@ -116,7 +165,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, loading, error, signInWithGoogle, signOut }}
+      value={{
+        user,
+        session,
+        loading,
+        error,
+        signInWithMagicLink,
+        signInWithPassword,
+        signUp,
+        signOut
+      }}
     >
       {children}
     </AuthContext.Provider>
