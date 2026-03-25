@@ -94,8 +94,8 @@ ALTER TABLE price_history ADD CONSTRAINT fk_price_history_restaurant
 CREATE INDEX IF NOT EXISTS idx_price_history_restaurant ON price_history(restaurant_id);
 
 -- 4. Enable RLS (optional but recommended)
--- ALTER TABLE restaurants ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE restaurant_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE restaurants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE restaurant_members ENABLE ROW LEVEL SECURITY;
 -- ... etc for other tables
 
 -- 5. Create first restaurant and admin (CUSTOMIZE THIS)

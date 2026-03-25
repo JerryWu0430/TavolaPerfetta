@@ -226,6 +226,6 @@ CREATE TABLE price_history (
 CREATE INDEX idx_price_history_restaurant ON price_history(restaurant_id);
 
 -- 12. Create your restaurant & admin (EDIT THIS)
-INSERT INTO restaurants (name, slug) VALUES ('My Restaurant', 'my-restaurant');
+INSERT INTO restaurants (name, slug) VALUES ('Jerry Wu Restaurant', 'jerry-wu-restaurant');
 INSERT INTO restaurant_members (email, role, restaurant_id)
-VALUES ('your-email@example.com', 'admin', 1);
+VALUES ('woohaoran@gmail.com', 'admin', 1);
