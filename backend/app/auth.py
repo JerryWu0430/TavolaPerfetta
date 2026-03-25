@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import jwt
+from jwt import PyJWKClient
 
 from .database import get_db
 from .config import get_settings
@@ -11,6 +12,16 @@ from .models.restaurant import Restaurant
 
 security = HTTPBearer()
 settings = get_settings()
+
+# JWKS client for ES256 token verification
+_jwks_client = None
+
+def get_jwks_client():
+    global _jwks_client
+    if _jwks_client is None:
+        jwks_url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url)
+    return _jwks_client
 
 
 class CurrentUser(BaseModel):
@@ -27,10 +38,14 @@ class CurrentUser(BaseModel):
 def verify_jwt(token: str) -> dict:
     """Verify Supabase JWT and return payload."""
     try:
+        # Get signing key from JWKS
+        jwks_client = get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256"],
             audience="authenticated",
         )
         return payload
