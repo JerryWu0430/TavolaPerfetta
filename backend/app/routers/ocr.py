@@ -53,7 +53,7 @@ async def process_invoice(file: UploadFile = File(...)):
 
     # Configure Gemini
     genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
     prompt = """Analyze this Italian delivery note (bolla) or invoice and extract:
 1. Supplier name
